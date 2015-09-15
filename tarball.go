@@ -11,19 +11,23 @@ import (
 )
 
 type tarball struct {
-	original string
-	rootDir  string
-	tf       *os.File
-	aw       *tar.Writer
-	gzf      *os.File
+	original  string
+	rootDir   string
+	totalSize int64
 
-	err error
+	tf  *os.File
+	aw  *tar.Writer
+	gzf *os.File
+
+	err    error
+	copied int64
 }
 
-func newTarball(dir string) *tarball {
+func newTarball(dir string, totalSize int64) *tarball {
 	return &tarball{
-		original: dir,
-		rootDir:  filepath.Join(dir),
+		original:  dir,
+		rootDir:   filepath.Join(dir),
+		totalSize: totalSize,
 	}
 }
 
@@ -55,6 +59,8 @@ func (t *tarball) makeTar() {
 		Typeflag: tar.TypeDir,
 	})
 }
+
+var buf = make([]byte, 32*1024)
 
 func (t *tarball) populateTar() {
 	t.err = filepath.Walk(t.original, func(path string, info os.FileInfo, err error) error {
