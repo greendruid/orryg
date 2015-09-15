@@ -1,17 +1,13 @@
 package main
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
+
+const dir = "N:/Projects/json"
 
 func main() {
 	copier := newSSHRemoteCopier(sshParameters{
@@ -27,109 +23,28 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	tf, err := ioutil.TempFile("", "orryg_tar")
+	start := time.Now()
+
+	tb := newTarball(dir)
+	if err := tb.process(); err != nil {
+		log.Fatalf("unable to make tarball. err=%v", err)
+	}
+
+	fi, err := tb.Stat()
 	if err != nil {
-		log.Fatalln(err)
-	}
-	defer func() {
-		name := tf.Name()
-
-		if err := tf.Close(); err != nil {
-			log.Fatalln(err)
-		}
-
-		if err := os.Remove(name); err != nil {
-			log.Fatalln(err)
-		}
-	}()
-
-	aw := tar.NewWriter(tf)
-
-	if err := aw.WriteHeader(&tar.Header{
-		Name:     "json/",
-		Mode:     0755,
-		Typeflag: tar.TypeDir,
-	}); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("unable to stat tarball. err=%v", err)
 	}
 
-	dir := "N:/Projects/json"
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		hdr, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-
-		hdr.Name = filepath.Join("json", relPath)
-		hdr.Name = strings.Replace(hdr.Name, string(os.PathSeparator), "/", -1)
-
-		if err := aw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-
-		_, err = io.Copy(aw, f)
-		return err
-	})
+	err = copier.CopyFromReader(tb, fi.Size(), fmt.Sprintf("%s_%s.tar.gz", filepath.Base(dir), time.Now().Format("2006-01-02")))
 	if err != nil {
-		log.Fatalln(err)
-	}
-	if err := aw.Close(); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("unable to copy the tarball to the remote host. err=%v", err)
 	}
 
-	gzf, err := ioutil.TempFile("", "orryg_targz")
-	if err != nil {
-		log.Fatalln(err)
+	elapsed := time.Now().Sub(start)
+
+	log.Printf("elapsed: %s", elapsed)
+
+	if err := tb.Close(); err != nil {
+		log.Fatalf("unable to close tarball. err=%v", err)
 	}
-	defer func() {
-		name := gzf.Name()
-
-		if err := gzf.Close(); err != nil {
-			log.Fatalln(err)
-		}
-
-		if err := os.Remove(name); err != nil {
-			log.Fatalln(err)
-		}
-	}()
-
-	tf.Seek(0, os.SEEK_SET)
-
-	gzw := gzip.NewWriter(gzf)
-
-	_, err = io.Copy(gzw, tf)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	if err := gzw.Close(); err != nil {
-		log.Fatalln(err)
-	}
-
-	gzf.Seek(0, os.SEEK_SET)
-	fi, err := gzf.Stat()
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = copier.CopyFromReader(gzf, fi.Size(), fmt.Sprintf("%s_%s.tar.gz", filepath.Base(dir), time.Now().Format("2006-01-02")))
-	log.Printf("%T %v", err, err)
 }
