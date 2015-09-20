@@ -5,9 +5,11 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -36,25 +38,24 @@ func (f dummyRemoteCopier) Connect() error { return nil }
 func (f dummyRemoteCopier) Close() error   { return nil }
 
 type sshParameters struct {
-	user           string
-	host           string
-	port           int
-	privateKeyFile string
-	backupsDir     string
+	User           string `json:"user"`
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	PrivateKeyFile string `json:"privateKeyFile"`
+	BackupsDir     string `json:"backupsDir"`
 }
 
-type sshRemoteCopier struct {
-	params sshParameters
-
+type scpRemoteCopier struct {
+	params *sshParameters
 	client *ssh.Client
 }
 
-func newSSHRemoteCopier(params sshParameters) remoteCopier {
-	return &sshRemoteCopier{params: params}
+func newSCPRemoteCopier(params *sshParameters) remoteCopier {
+	return &scpRemoteCopier{params: params}
 }
 
-func (c *sshRemoteCopier) Connect() error {
-	privateKeyBytes, err := ioutil.ReadFile(c.params.privateKeyFile)
+func (c *scpRemoteCopier) Connect() error {
+	privateKeyBytes, err := ioutil.ReadFile(c.params.PrivateKeyFile)
 	if err != nil {
 		return err
 	}
@@ -65,18 +66,27 @@ func (c *sshRemoteCopier) Connect() error {
 	}
 
 	clientConfig := ssh.ClientConfig{
-		User: c.params.user,
+		User: c.params.User,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
 	}
 
-	c.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", c.params.host, c.params.port), &clientConfig)
+	addr := fmt.Sprintf("%s:%d", c.params.Host, c.params.Port)
+
+	conn, err := net.DialTimeout("tcp", addr, time.Second*5)
 	if err != nil {
 		return err
 	}
 
-	return err
+	sshc, chans, reqs, err := ssh.NewClientConn(conn, addr, &clientConfig)
+	if err != nil {
+		return err
+	}
+
+	c.client = ssh.NewClient(sshc, chans, reqs)
+
+	return nil
 }
 
 var (
@@ -99,7 +109,6 @@ func readError(r io.Reader, code byte) error {
 
 func addDirectory(w io.WriteCloser, r io.Reader, name string) (err error) {
 	_, err = fmt.Fprintf(w, "D0755 0 %s\n", name)
-	log.Printf("D0755 0 %s", name)
 	if err != nil {
 		return err
 	}
@@ -115,7 +124,7 @@ func addDirectory(w io.WriteCloser, r io.Reader, name string) (err error) {
 	return nil
 }
 
-func (c *sshRemoteCopier) CopyFromReader(src io.Reader, size int64, path string) error {
+func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string) error {
 	session, err := c.client.NewSession()
 	if err != nil {
 		return err
@@ -147,7 +156,6 @@ func (c *sshRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 
 		fname := filepath.Base(path)
 		_, err = fmt.Fprintf(w, "C0600 %d %s\n", size, fname)
-		log.Printf("C0600 %d %s", size, fname)
 		if err != nil {
 			log.Printf("unable to add file %s. err=%v", fname, err)
 			return
@@ -166,12 +174,11 @@ func (c *sshRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 			}
 		}
 
-		n, err := io.Copy(w, src)
+		_, err = io.Copy(w, src)
 		if err != nil {
 			log.Printf("unable to copy file data. err=%v", err)
 			return
 		}
-		log.Printf("written %d", n)
 
 		_, err = w.Write([]byte{0})
 		if err != nil {
@@ -198,9 +205,9 @@ func (c *sshRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 		}
 	}()
 
-	return session.Run(fmt.Sprintf("/usr/bin/scp -tr %s", c.params.backupsDir))
+	return session.Run(fmt.Sprintf("/usr/bin/scp -tr %s", c.params.BackupsDir))
 }
 
-func (c *sshRemoteCopier) Close() error {
+func (c *scpRemoteCopier) Close() error {
 	return c.client.Close()
 }

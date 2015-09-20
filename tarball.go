@@ -11,23 +11,23 @@ import (
 )
 
 type tarball struct {
-	original  string
-	rootDir   string
-	totalSize int64
+	original    string
+	archiveName string
 
 	tf  *os.File
 	aw  *tar.Writer
 	gzf *os.File
+	ef  *os.File
+	fi  os.FileInfo
 
 	err    error
 	copied int64
 }
 
-func newTarball(dir string, totalSize int64) *tarball {
+func newTarball(id internalDirectory) *tarball {
 	return &tarball{
-		original:  dir,
-		rootDir:   filepath.Join(dir),
-		totalSize: totalSize,
+		original:    id.OrigPath,
+		archiveName: id.ArchiveName,
 	}
 }
 
@@ -35,6 +35,8 @@ func (t *tarball) process() error {
 	t.makeTar()
 	t.populateTar()
 	t.makeTarball()
+	t.encryptTarball()
+	t.stat()
 
 	return t.err
 }
@@ -54,13 +56,11 @@ func (t *tarball) makeTar() {
 	// This creates a single root directory in the tarball.
 	// Prevents polluting the cwd when untar-ing the archive.
 	t.err = t.aw.WriteHeader(&tar.Header{
-		Name:     t.rootDir,
+		Name:     t.archiveName,
 		Mode:     0755,
 		Typeflag: tar.TypeDir,
 	})
 }
-
-var buf = make([]byte, 32*1024)
 
 func (t *tarball) populateTar() {
 	t.err = filepath.Walk(t.original, func(path string, info os.FileInfo, err error) error {
@@ -77,12 +77,12 @@ func (t *tarball) populateTar() {
 			return err
 		}
 
-		relPath, err := filepath.Rel(dir, path)
+		relPath, err := filepath.Rel(t.original, path)
 		if err != nil {
 			return err
 		}
 
-		hdr.Name = filepath.Join(t.rootDir, relPath)
+		hdr.Name = filepath.Join(t.archiveName, relPath)
 		hdr.Name = strings.Replace(hdr.Name, string(os.PathSeparator), "/", -1)
 
 		if err := t.aw.WriteHeader(hdr); err != nil {
@@ -141,12 +141,21 @@ func (t *tarball) makeTarball() {
 	_, t.err = t.gzf.Seek(0, os.SEEK_SET)
 }
 
-func (t *tarball) Read(p []byte) (int, error) {
-	return t.gzf.Read(p)
+func (t *tarball) encryptTarball() {
+	// t.ef, t.err = ioutil.TempFile("", "orryg_gpg")
+	// if t.err != nil {
+	// 	return
+	// }
+
+	t.ef = t.gzf
 }
 
-func (t *tarball) Stat() (os.FileInfo, error) {
-	return t.gzf.Stat()
+func (t *tarball) stat() {
+	t.fi, t.err = t.ef.Stat()
+}
+
+func (t *tarball) Read(p []byte) (int, error) {
+	return t.ef.Read(p)
 }
 
 func (t *tarball) Close() error {
@@ -154,9 +163,9 @@ func (t *tarball) Close() error {
 		return t.err
 	}
 
-	if err := t.gzf.Close(); err != nil {
+	if err := t.ef.Close(); err != nil {
 		return err
 	}
 
-	return os.Remove(t.gzf.Name())
+	return os.Remove(t.ef.Name())
 }
