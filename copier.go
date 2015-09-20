@@ -38,11 +38,29 @@ func (f dummyRemoteCopier) Connect() error { return nil }
 func (f dummyRemoteCopier) Close() error   { return nil }
 
 type sshParameters struct {
-	User           string `json:"user"`
-	Host           string `json:"host"`
-	Port           int    `json:"port"`
-	PrivateKeyFile string `json:"privateKeyFile"`
-	BackupsDir     string `json:"backupsDir"`
+	User           string
+	Host           string
+	Port           int
+	PrivateKeyFile string
+	BackupsDir     string
+}
+
+func (p *sshParameters) merge(params sshParameters) {
+	if params.User != "" {
+		p.User = params.User
+	}
+	if params.Host != "" {
+		p.Host = params.Host
+	}
+	if params.Port > 0 {
+		p.Port = params.Port
+	}
+	if params.PrivateKeyFile != "" {
+		p.PrivateKeyFile = params.PrivateKeyFile
+	}
+	if params.BackupsDir != "" {
+		p.BackupsDir = params.BackupsDir
+	}
 }
 
 type scpRemoteCopier struct {

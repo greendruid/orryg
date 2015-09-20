@@ -11,8 +11,7 @@ import (
 )
 
 type tarball struct {
-	original    string
-	archiveName string
+	d directory
 
 	tf  *os.File
 	aw  *tar.Writer
@@ -24,11 +23,8 @@ type tarball struct {
 	copied int64
 }
 
-func newTarball(id internalDirectory) *tarball {
-	return &tarball{
-		original:    id.OrigPath,
-		archiveName: id.ArchiveName,
-	}
+func newTarball(d directory) *tarball {
+	return &tarball{d: d}
 }
 
 func (t *tarball) process() error {
@@ -56,14 +52,14 @@ func (t *tarball) makeTar() {
 	// This creates a single root directory in the tarball.
 	// Prevents polluting the cwd when untar-ing the archive.
 	t.err = t.aw.WriteHeader(&tar.Header{
-		Name:     t.archiveName,
+		Name:     t.d.ArchiveName,
 		Mode:     0755,
 		Typeflag: tar.TypeDir,
 	})
 }
 
 func (t *tarball) populateTar() {
-	t.err = filepath.Walk(t.original, func(path string, info os.FileInfo, err error) error {
+	t.err = filepath.Walk(t.d.OrigPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -77,12 +73,12 @@ func (t *tarball) populateTar() {
 			return err
 		}
 
-		relPath, err := filepath.Rel(t.original, path)
+		relPath, err := filepath.Rel(t.d.OrigPath, path)
 		if err != nil {
 			return err
 		}
 
-		hdr.Name = filepath.Join(t.archiveName, relPath)
+		hdr.Name = filepath.Join(t.d.ArchiveName, relPath)
 		hdr.Name = strings.Replace(hdr.Name, string(os.PathSeparator), "/", -1)
 
 		if err := t.aw.WriteHeader(hdr); err != nil {
