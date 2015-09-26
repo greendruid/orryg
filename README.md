@@ -14,38 +14,22 @@ The destinations will support:
 
 Orryg is smart: it remembers the last time a backup was made for a directory, and will retrigger a backup at the appropriate time, even if you stopped your computer.
 
-Installation
-------------
+daemon dev setup
+================
 
-For now you need to have Go installed.
+    export GO15VENDOREXPERIMENT=1
+    go get github.com/codegangsta/gin
 
-    go get github.com/vrischmann/orryg
+    gin -a 8080
 
-Usage
------
+web ui dev setup
+================
 
-Right now it works with a configuration file.
+    npm install -g typescript
+    npm install -g tsd
 
-In the future I'll make a web interface so it's more user-friendly and this will disappear.
+    tsd install react --save --resolve
 
-```json
-{
-    "checkFrequency": "1m",
-    "dateFormat": "2006-02-01_030405",
-    "copiers": [{
-        "type": "scp",
-        "conf": {
-            "user": "sphax",
-            "host": "192.168.1.34",
-            "port": 22,
-            "privateKeyFile": "N:/backup_dev.rsa",
-            "backupsDir": "/tmp/backups"
-        }
-    }],
-    "directories": [{
-        "frequency": "12h",
-        "origPath": "N:/Projects",
-        "archiveName": "projects"
-    }]
-}
-```
+Run this to automatically rebuilt the web ui.
+
+    tsc -w

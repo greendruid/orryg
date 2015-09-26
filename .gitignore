@@ -1,1 +1,6 @@
 /orryg*
+/gin-bin*
+
+/assets/dist
+/node_modules
+/typings

@@ -5,18 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"time"
 )
-
-type router struct {
-	routes map[string]handlerFunc
-}
-
-func newRouter() *router {
-	return &router{
-		routes: make(map[string]handlerFunc),
-	}
-}
 
 var (
 	errUnauthorized = errors.New("unauthorized")
@@ -24,34 +13,23 @@ var (
 
 type handlerFunc func(w http.ResponseWriter, req *http.Request) error
 
-func (r *router) handleFunc(path string, fn handlerFunc) {
-	r.routes[path] = fn
-}
+func handler(fn handlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		// start := time.Now()
 
-func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	start := time.Now()
-	lw := &loggingWriter{u: w}
-
-	fn, ok := r.routes[req.URL.Path]
-	if !ok {
-		lw.WriteHeader(http.StatusNotFound)
-		io.WriteString(lw, "Not Found")
-	} else {
-		err := fn(lw, req)
+		err := fn(w, req)
 		if err == errUnauthorized {
-			lw.WriteHeader(http.StatusUnauthorized)
-			io.WriteString(lw, "Unauthorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			io.WriteString(w, "Unauthorized")
 		}
 		if err != nil {
-			lw.WriteHeader(http.StatusInternalServerError)
-			io.WriteString(lw, "Internal Server Error")
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, "Internal Server Error")
 			log.Printf("error while processing request. err=%v", err)
 		}
+
+		// elapsed := time.Now().Sub(start)
 	}
-
-	elapsed := time.Now().Sub(start)
-
-	log.Printf("%s %d %s - %s", elapsed, lw.st, http.StatusText(lw.st), req.URL.Path)
 }
 
 type loggingWriter struct {

@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/codegangsta/negroni"
+	"github.com/gorilla/mux"
 	"github.com/vrischmann/flagutil"
 )
 
@@ -48,9 +50,16 @@ func main() {
 	}
 
 	{
-		router := newRouter()
-		router.handleFunc("/copier/list", handleCopierList)
-		go http.ListenAndServe(flListenAddr[0], router)
+		router := mux.NewRouter()
+		router.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir("./assets/css"))))
+		router.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir("./assets/dist"))))
+		router.HandleFunc("/", handler(handleIndex))
+
+		n := negroni.New()
+		n.Use(negroni.NewLogger())
+		n.UseHandler(router)
+
+		go http.ListenAndServe(flListenAddr[0], n)
 	}
 
 	signalCh := make(chan os.Signal, 1)
