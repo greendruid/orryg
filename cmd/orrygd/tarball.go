@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/vrischmann/orryg"
 )
 
 type tarball struct {
-	d directory
+	d orryg.Directory
 
 	tf  *os.File
 	aw  *tar.Writer
@@ -23,7 +25,7 @@ type tarball struct {
 	copied int64
 }
 
-func newTarball(d directory) *tarball {
+func newTarball(d orryg.Directory) *tarball {
 	return &tarball{d: d}
 }
 
@@ -59,7 +61,7 @@ func (t *tarball) makeTar() {
 }
 
 func (t *tarball) populateTar() {
-	t.err = filepath.Walk(t.d.OrigPath, func(path string, info os.FileInfo, err error) error {
+	t.err = filepath.Walk(t.d.OriginalPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -73,7 +75,7 @@ func (t *tarball) populateTar() {
 			return err
 		}
 
-		relPath, err := filepath.Rel(t.d.OrigPath, path)
+		relPath, err := filepath.Rel(t.d.OriginalPath, path)
 		if err != nil {
 			return err
 		}

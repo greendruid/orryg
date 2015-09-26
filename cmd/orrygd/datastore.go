@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/boltdb/bolt"
+	"github.com/vrischmann/orryg"
 	"github.com/vrischmann/userdir"
 )
 
@@ -48,13 +49,13 @@ func (s *dataStore) Close() error {
 	return s.db.Close()
 }
 
-func (s *dataStore) getSettings() (se settings, err error) {
+func (s *dataStore) getSettings() (se orryg.Settings, err error) {
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(settingsBucket)
 
 		data := bucket.Get(settingsBucket)
 		if data == nil {
-			se = defaultSettings()
+			se = orryg.DefaultSettings()
 
 			data, err := json.Marshal(se)
 			if err != nil {
@@ -69,13 +70,13 @@ func (s *dataStore) getSettings() (se settings, err error) {
 	return
 }
 
-func (s *dataStore) getAllSCPCopierConfs() (res []scpCopierConf, err error) {
+func (s *dataStore) getAllSCPCopierConfs() (res []orryg.SCPCopierConf, err error) {
 	err = s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(copiersBucket)
 
 		cursor := bucket.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var c scpCopierConf
+			var c orryg.SCPCopierConf
 
 			if err := json.Unmarshal(v, &c); err != nil {
 				return err
@@ -90,19 +91,19 @@ func (s *dataStore) getAllSCPCopierConfs() (res []scpCopierConf, err error) {
 	return
 }
 
-func (s *dataStore) mergeSCPCopierConf(c scpCopierConf) error {
+func (s *dataStore) mergeSCPCopierConf(c orryg.SCPCopierConf) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(copiersBucket)
 
 		key := append([]byte{byte(scpCopierType)}, []byte(c.Name)...)
 
-		var params sshParameters
+		var params orryg.SSHParameters
 		if data := bucket.Get(key); data != nil {
 			if err := json.Unmarshal(data, &params); err != nil {
 				return err
 			}
 
-			params.merge(c.Params)
+			params.Merge(c.Params)
 		} else {
 			params = c.Params
 		}
@@ -116,19 +117,19 @@ func (s *dataStore) mergeSCPCopierConf(c scpCopierConf) error {
 	})
 }
 
-func (s *dataStore) mergeDirectory(dir directory) error {
+func (s *dataStore) mergeDirectory(dir orryg.Directory) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(directoriesBucket)
 
-		key := []byte(dir.OrigPath)
+		key := []byte(dir.OriginalPath)
 
-		var d directory
+		var d orryg.Directory
 		if data := bucket.Get(key); data != nil {
 			if err := json.Unmarshal(data, &d); err != nil {
 				return err
 			}
 
-			d.merge(dir)
+			d.Merge(dir)
 		} else {
 			d = dir
 		}
@@ -142,13 +143,13 @@ func (s *dataStore) mergeDirectory(dir directory) error {
 	})
 }
 
-func (s *dataStore) forEeachDirectory(fn func(d directory) error) error {
+func (s *dataStore) forEeachDirectory(fn func(d orryg.Directory) error) error {
 	return s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(directoriesBucket)
 
 		cursor := bucket.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var d directory
+			var d orryg.Directory
 
 			if err := json.Unmarshal(v, &d); err != nil {
 				return err

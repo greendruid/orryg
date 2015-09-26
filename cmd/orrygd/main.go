@@ -8,7 +8,6 @@ import (
 	"os/signal"
 
 	"github.com/codegangsta/negroni"
-	"github.com/gorilla/mux"
 	"github.com/vrischmann/flagutil"
 )
 
@@ -50,10 +49,10 @@ func main() {
 	}
 
 	{
-		router := mux.NewRouter()
-		router.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir("./assets/css"))))
-		router.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir("./assets/dist"))))
-		router.HandleFunc("/", handler(handleIndex))
+		router := http.NewServeMux()
+		router.HandleFunc("/copiers/list", handler(handleCopiersList))
+		router.HandleFunc("/copiers/add", handler(handleCopiersAdd))
+		router.HandleFunc("/directories/list", handler(handleDirectoriesList))
 
 		n := negroni.New()
 		n.Use(negroni.NewLogger())

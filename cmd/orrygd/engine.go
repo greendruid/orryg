@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/vrischmann/orryg"
 )
 
 type engine struct {
 	st     *dataStore
-	oodCh  chan directory
+	oodCh  chan orryg.Directory
 	stopCh chan struct{}
 
 	copiers []remoteCopier
@@ -17,7 +19,7 @@ type engine struct {
 func newEngine(st *dataStore) (*engine, error) {
 	e := &engine{
 		st:     st,
-		oodCh:  make(chan directory),
+		oodCh:  make(chan orryg.Directory),
 		stopCh: make(chan struct{}),
 	}
 
@@ -58,7 +60,7 @@ loop:
 		case id := <-e.oodCh:
 			start := time.Now()
 
-			log.Printf("backing up %s", id.OrigPath)
+			log.Printf("backing up %s", id.OriginalPath)
 
 			tb := newTarball(id)
 			if err := tb.process(); err != nil {
@@ -87,7 +89,7 @@ loop:
 
 			elapsed := time.Now().Sub(start)
 
-			log.Printf("backed up %s in %s", id.OrigPath, elapsed)
+			log.Printf("backed up %s in %s", id.OriginalPath, elapsed)
 
 			id.LastUpdated = time.Now()
 			if err := e.st.mergeDirectory(id); err != nil {
@@ -138,8 +140,8 @@ loop:
 	}
 }
 
-func (e *engine) getOutOfDate() (res []directory, err error) {
-	err = e.st.forEeachDirectory(func(d directory) error {
+func (e *engine) getOutOfDate() (res []orryg.Directory, err error) {
+	err = e.st.forEeachDirectory(func(d orryg.Directory) error {
 		elapsed := time.Now().Sub(d.LastUpdated)
 		if d.LastUpdated.IsZero() || elapsed >= d.Frequency {
 			res = append(res, d)

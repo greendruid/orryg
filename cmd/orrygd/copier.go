@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vrischmann/orryg"
+
 	"golang.org/x/crypto/ssh"
 )
 
@@ -37,38 +39,12 @@ func (f dummyRemoteCopier) CopyFromReader(src io.Reader, size int64, path string
 func (f dummyRemoteCopier) Connect() error { return nil }
 func (f dummyRemoteCopier) Close() error   { return nil }
 
-type sshParameters struct {
-	User           string
-	Host           string
-	Port           int
-	PrivateKeyFile string
-	BackupsDir     string
-}
-
-func (p *sshParameters) merge(params sshParameters) {
-	if params.User != "" {
-		p.User = params.User
-	}
-	if params.Host != "" {
-		p.Host = params.Host
-	}
-	if params.Port > 0 {
-		p.Port = params.Port
-	}
-	if params.PrivateKeyFile != "" {
-		p.PrivateKeyFile = params.PrivateKeyFile
-	}
-	if params.BackupsDir != "" {
-		p.BackupsDir = params.BackupsDir
-	}
-}
-
 type scpRemoteCopier struct {
-	params *sshParameters
+	params *orryg.SSHParameters
 	client *ssh.Client
 }
 
-func newSCPRemoteCopier(params *sshParameters) remoteCopier {
+func newSCPRemoteCopier(params *orryg.SSHParameters) remoteCopier {
 	return &scpRemoteCopier{params: params}
 }
 
