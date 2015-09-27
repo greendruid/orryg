@@ -13,14 +13,15 @@ type engine struct {
 	oodCh  chan orryg.Directory
 	stopCh chan struct{}
 
-	copiers []remoteCopier
+	copiers map[string]remoteCopier
 }
 
 func newEngine(st *dataStore) (*engine, error) {
 	e := &engine{
-		st:     st,
-		oodCh:  make(chan orryg.Directory),
-		stopCh: make(chan struct{}),
+		st:      st,
+		oodCh:   make(chan orryg.Directory),
+		stopCh:  make(chan struct{}),
+		copiers: make(map[string]remoteCopier),
 	}
 
 	if err := e.initCopiers(); err != nil {
@@ -45,7 +46,7 @@ func (e *engine) initCopiers() error {
 			return err
 		}
 
-		e.copiers = append(e.copiers, cop)
+		e.copiers[c.Name] = cop
 	}
 
 	return nil
@@ -55,8 +56,36 @@ func (e *engine) run() {
 loop:
 	for {
 		select {
+		case name := <-e.st.copierRemoved:
+			cop, ok := e.copiers[name]
+			if !ok {
+				continue
+			}
+
+			if err := cop.Close(); err != nil {
+				log.Printf("unable to close copier. err=%v", err)
+			}
+
+			delete(e.copiers, name)
+
+		case conf := <-e.st.copierAdded:
+			switch conf.Type {
+			case orryg.SCPCopierType:
+
+				scpConf := conf.Conf.(orryg.SCPCopierConf)
+				cop := newSCPRemoteCopier(&scpConf.Params)
+
+				if err := cop.Connect(); err != nil {
+					log.Printf("unable to connect copier. err=%v", err)
+					continue
+				}
+
+				e.copiers[scpConf.Name] = cop
+			}
+
 		case <-e.stopCh:
 			break loop
+
 		case id := <-e.oodCh:
 			start := time.Now()
 
@@ -141,13 +170,17 @@ loop:
 }
 
 func (e *engine) getOutOfDate() (res []orryg.Directory, err error) {
-	err = e.st.forEeachDirectory(func(d orryg.Directory) error {
+	tmp, err := e.st.getDirectories()
+	if err != nil {
+		return
+	}
+
+	for _, d := range tmp {
 		elapsed := time.Now().Sub(d.LastUpdated)
 		if d.LastUpdated.IsZero() || elapsed >= d.Frequency {
 			res = append(res, d)
 		}
+	}
 
-		return nil
-	})
 	return
 }

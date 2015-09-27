@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/vrischmann/orryg"
@@ -16,7 +17,9 @@ var (
 )
 
 type dataStore struct {
-	db *bolt.DB
+	db            *bolt.DB
+	copierRemoved chan string
+	copierAdded   chan orryg.CopierConf
 }
 
 func newDataStore() (*dataStore, error) {
@@ -28,7 +31,9 @@ func newDataStore() (*dataStore, error) {
 	}
 
 	return &dataStore{
-		db: db,
+		db:            db,
+		copierRemoved: make(chan string),
+		copierAdded:   make(chan orryg.CopierConf),
 	}, nil
 }
 
@@ -75,12 +80,18 @@ func (s *dataStore) removeCopier(name string) error {
 		bucket := tx.Bucket(copiersBucket)
 
 		cursor := bucket.Cursor()
+		deleted := false
 		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
 			if string(k[:len(k)-1]) == name {
+				deleted = true
 				if err := cursor.Delete(); err != nil {
 					return err
 				}
 			}
+		}
+
+		if deleted {
+			s.copierRemoved <- name
 		}
 
 		return nil
@@ -137,6 +148,11 @@ func (s *dataStore) mergeSCPCopierConf(c orryg.SCPCopierConf) error {
 			return err
 		}
 
+		s.copierAdded <- orryg.CopierConf{
+			Type: orryg.SCPCopierType,
+			Conf: c,
+		}
+
 		return bucket.Put(key, data)
 	})
 }
@@ -167,8 +183,8 @@ func (s *dataStore) mergeDirectory(dir orryg.Directory) error {
 	})
 }
 
-func (s *dataStore) forEeachDirectory(fn func(d orryg.Directory) error) error {
-	return s.db.View(func(tx *bolt.Tx) error {
+func (s *dataStore) getDirectories() (res []orryg.Directory, err error) {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(directoriesBucket)
 
 		cursor := bucket.Cursor()
@@ -179,11 +195,11 @@ func (s *dataStore) forEeachDirectory(fn func(d orryg.Directory) error) error {
 				return err
 			}
 
-			if err := fn(d); err != nil {
-				return err
-			}
+			res = append(res, d)
 		}
 
 		return nil
 	})
+
+	return
 }

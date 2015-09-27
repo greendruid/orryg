@@ -94,6 +94,8 @@ func main() {
 	switch strings.ToLower(flag.Arg(0)) {
 	case "copiers":
 		err = copiersCommand(flag.Args()[1:]...)
+	case "directories":
+		err = directoriesCommand(flag.Args()[1:]...)
 	}
 
 	if err != nil {

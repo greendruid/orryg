@@ -85,13 +85,6 @@ func handleCopiersAdd(w http.ResponseWriter, req *http.Request) error {
 		if err = store.mergeSCPCopierConf(scpConf); err != nil {
 			return err
 		}
-
-		l, err := store.getAllSCPCopierConfs()
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("%+v\n", l)
 	}
 
 	return writeString(w, "OK")
@@ -111,11 +104,35 @@ func handleCopiersRemove(w http.ResponseWriter, req *http.Request) error {
 }
 
 func handleDirectoriesList(w http.ResponseWriter, req *http.Request) error {
-	return writeJSON(w, []byte(`[]`))
+	res, err := store.getDirectories()
+	if err != nil {
+		return err
+	}
+
+	return marshalAndWriteJSON(w, res)
 }
 
 func handleDirectoriesAdd(w http.ResponseWriter, req *http.Request) error {
-	return writeJSON(w, []byte(`[]`))
+	defer req.Body.Close()
+	data, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+
+	var d orryg.Directory
+	err = json.Unmarshal(data, &d)
+	if err != nil {
+		return err
+	}
+
+	if err = store.mergeDirectory(d); err != nil {
+		return err
+	}
+
+	// Force the first backup
+	e.oodCh <- d
+
+	return writeString(w, "OK")
 }
 
 func handleDirectoriesRemove(w http.ResponseWriter, req *http.Request) error {

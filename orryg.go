@@ -14,7 +14,7 @@ type Settings struct {
 
 func DefaultSettings() Settings {
 	return Settings{
-		CheckFrequency: time.Minute * 1,
+		CheckFrequency: time.Second * 1,
 		DateFormat:     "20060201_030405",
 	}
 }
@@ -113,6 +113,8 @@ type Directory struct {
 	ArchiveName  string        `json:"archiveName"`
 	LastUpdated  time.Time     `json:"lastUpdated"`
 }
+
+type Directories []Directory
 
 func (d *Directory) Merge(id Directory) {
 	if id.Frequency > 0 {
