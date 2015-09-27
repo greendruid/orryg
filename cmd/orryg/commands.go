@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -117,6 +118,19 @@ func copiersAddSCPCommand(args ...string) error {
 }
 
 func copiersRemoveCommand(args ...string) error {
+	if len(args) < 1 {
+		return errors.New("please provide the name of the copier to remove")
+	}
+
+	name := args[0]
+
+	s, err := cl.post("/copiers/remove/"+name, nil)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(s)
+
 	return nil
 }
 

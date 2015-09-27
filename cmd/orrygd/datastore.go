@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 
 	"github.com/boltdb/bolt"
@@ -71,13 +70,30 @@ func (s *dataStore) getSettings() (se orryg.Settings, err error) {
 	return
 }
 
+func (s *dataStore) removeCopier(name string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(copiersBucket)
+
+		cursor := bucket.Cursor()
+		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+			if string(k[:len(k)-1]) == name {
+				if err := cursor.Delete(); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+}
+
 func (s *dataStore) getAllSCPCopierConfs() (res []orryg.SCPCopierConf, err error) {
 	err = s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(copiersBucket)
 
 		cursor := bucket.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			typ := orryg.CopierType(k[0])
+			typ := orryg.CopierType(k[len(k)-1])
 			if typ != orryg.SCPCopierType {
 				continue
 			}
@@ -88,7 +104,7 @@ func (s *dataStore) getAllSCPCopierConfs() (res []orryg.SCPCopierConf, err error
 			}
 
 			res = append(res, orryg.SCPCopierConf{
-				Name:   string(k[1:]),
+				Name:   string(k[:len(k)-1]),
 				Params: params,
 			})
 		}
@@ -103,9 +119,7 @@ func (s *dataStore) mergeSCPCopierConf(c orryg.SCPCopierConf) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(copiersBucket)
 
-		fmt.Println(c)
-
-		key := append([]byte{byte(orryg.SCPCopierType)}, []byte(c.Name)...)
+		key := append([]byte(c.Name), byte(orryg.SCPCopierType))
 
 		var params orryg.SSHParameters
 		if data := bucket.Get(key); data != nil {

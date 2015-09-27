@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -97,7 +98,16 @@ func handleCopiersAdd(w http.ResponseWriter, req *http.Request) error {
 }
 
 func handleCopiersRemove(w http.ResponseWriter, req *http.Request) error {
-	return writeJSON(w, []byte(`[]`))
+	name := req.URL.Path[len("/copiers/remove/"):]
+	if name == "" {
+		return errors.New("no name defined")
+	}
+
+	if err := store.removeCopier(name); err != nil {
+		return err
+	}
+
+	return writeString(w, "OK")
 }
 
 func handleDirectoriesList(w http.ResponseWriter, req *http.Request) error {
