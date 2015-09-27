@@ -1,8 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+
+	"github.com/vrischmann/orryg"
 )
 
 func writeJSON(w http.ResponseWriter, data []byte) error {
@@ -12,6 +16,23 @@ func writeJSON(w http.ResponseWriter, data []byte) error {
 	_, err := w.Write(data)
 
 	return err
+}
+
+func writeString(w http.ResponseWriter, data string) error {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+
+	_, err := w.Write([]byte(data))
+
+	return err
+}
+
+func marshalAndWriteJSON(w http.ResponseWriter, val interface{}) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	enc := json.NewEncoder(w)
+	return enc.Encode(val)
 }
 
 func writeError(w http.ResponseWriter, format string, args ...interface{}) error {
@@ -24,13 +45,69 @@ func writeError(w http.ResponseWriter, format string, args ...interface{}) error
 }
 
 func handleCopiersList(w http.ResponseWriter, req *http.Request) error {
-	return writeJSON(w, []byte(`[]`))
+	scpConfs, err := store.getAllSCPCopierConfs()
+	if err != nil {
+		return err
+	}
+
+	var res orryg.CopiersConf
+	for _, el := range scpConfs {
+		res = append(res, orryg.CopierConf{
+			Type: orryg.SCPCopierType,
+			Conf: el,
+		})
+	}
+
+	return marshalAndWriteJSON(w, res)
 }
 
 func handleCopiersAdd(w http.ResponseWriter, req *http.Request) error {
+	defer req.Body.Close()
+	data, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+
+	var body orryg.UCopierConf
+	err = json.Unmarshal(data, &body)
+	if err != nil {
+		return err
+	}
+
+	switch body.Type {
+	case orryg.SCPCopierType:
+		var scpConf orryg.SCPCopierConf
+		if err = json.Unmarshal(body.Conf, &scpConf); err != nil {
+			return err
+		}
+
+		if err = store.mergeSCPCopierConf(scpConf); err != nil {
+			return err
+		}
+
+		l, err := store.getAllSCPCopierConfs()
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%+v\n", l)
+	}
+
+	return writeString(w, "OK")
+}
+
+func handleCopiersRemove(w http.ResponseWriter, req *http.Request) error {
 	return writeJSON(w, []byte(`[]`))
 }
 
 func handleDirectoriesList(w http.ResponseWriter, req *http.Request) error {
+	return writeJSON(w, []byte(`[]`))
+}
+
+func handleDirectoriesAdd(w http.ResponseWriter, req *http.Request) error {
+	return writeJSON(w, []byte(`[]`))
+}
+
+func handleDirectoriesRemove(w http.ResponseWriter, req *http.Request) error {
 	return writeJSON(w, []byte(`[]`))
 }

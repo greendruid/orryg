@@ -50,9 +50,13 @@ func main() {
 
 	{
 		router := http.NewServeMux()
+		// TODO(vincent): settings
 		router.HandleFunc("/copiers/list", handler(handleCopiersList))
 		router.HandleFunc("/copiers/add", handler(handleCopiersAdd))
+		router.HandleFunc("/copiers/remove", handler(handleCopiersRemove))
 		router.HandleFunc("/directories/list", handler(handleDirectoriesList))
+		router.HandleFunc("/directories/add", handler(handleDirectoriesAdd))
+		router.HandleFunc("/directories/remove", handler(handleDirectoriesRemove))
 
 		n := negroni.New()
 		n.Use(negroni.NewLogger())

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/vrischmann/flagutil"
 	"github.com/vrischmann/userdir"
@@ -26,8 +27,9 @@ var (
 	flAddr flagutil.NetworkAddresses
 
 	conf struct {
-		Addr string
+		Addr string `json:"addr"`
 	}
+	cl *client
 )
 
 func init() {
@@ -41,18 +43,20 @@ func parseConfigAndArgs() error {
 		return err
 	}
 
-	fi, err := f.Stat()
-	if err != nil {
-		return err
-	}
+	if !os.IsNotExist(err) {
+		fi, err := f.Stat()
+		if err != nil {
+			return err
+		}
 
-	if fi.IsDir() {
-		return fmt.Errorf("%s is a directory", configPath)
-	}
+		if fi.IsDir() {
+			return fmt.Errorf("%s is a directory", configPath)
+		}
 
-	dec := json.NewDecoder(f)
-	if err := dec.Decode(&conf); err != nil {
-		return err
+		dec := json.NewDecoder(f)
+		if err := dec.Decode(&conf); err != nil {
+			return err
+		}
 	}
 
 	if len(flAddr) > 0 {
@@ -65,7 +69,35 @@ func parseConfigAndArgs() error {
 func main() {
 	flag.Parse()
 
-	if err := parseConfigAndArgs(); err != nil {
+	err := parseConfigAndArgs()
+	if err != nil {
 		log.Fatalln(err)
+	}
+
+	if conf.Addr == "" {
+		fmt.Println("please provide a server to connect to")
+		os.Exit(1)
+		return
+	}
+
+	if flag.NArg() < 1 {
+		fmt.Println("please provide a command")
+		os.Exit(1)
+		return
+	}
+
+	cl, err = newClient(conf.Addr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	switch strings.ToLower(flag.Arg(0)) {
+	case "copiers":
+		err = copiersCommand(flag.Args()[1:]...)
+	}
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }

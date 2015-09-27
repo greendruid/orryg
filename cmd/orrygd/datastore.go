@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 
 	"github.com/boltdb/bolt"
@@ -76,13 +77,20 @@ func (s *dataStore) getAllSCPCopierConfs() (res []orryg.SCPCopierConf, err error
 
 		cursor := bucket.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var c orryg.SCPCopierConf
+			typ := orryg.CopierType(k[0])
+			if typ != orryg.SCPCopierType {
+				continue
+			}
 
-			if err := json.Unmarshal(v, &c); err != nil {
+			var params orryg.SSHParameters
+			if err := json.Unmarshal(v, &params); err != nil {
 				return err
 			}
 
-			res = append(res, c)
+			res = append(res, orryg.SCPCopierConf{
+				Name:   string(k[1:]),
+				Params: params,
+			})
 		}
 
 		return nil
@@ -95,7 +103,9 @@ func (s *dataStore) mergeSCPCopierConf(c orryg.SCPCopierConf) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(copiersBucket)
 
-		key := append([]byte{byte(scpCopierType)}, []byte(c.Name)...)
+		fmt.Println(c)
+
+		key := append([]byte{byte(orryg.SCPCopierType)}, []byte(c.Name)...)
 
 		var params orryg.SSHParameters
 		if data := bucket.Get(key); data != nil {

@@ -1,6 +1,5 @@
-/orryg*
-/gin-bin*
+/cmd/orryg/orryg*
+/cmd/orrygd/orrygd*
+/cmd/orrygd/gin-bin*
 
-/assets/dist
-/node_modules
-/typings
+*.*.swp
