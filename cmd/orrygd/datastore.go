@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
-	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/vrischmann/orryg"
