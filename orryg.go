@@ -15,7 +15,7 @@ type Settings struct {
 func DefaultSettings() Settings {
 	return Settings{
 		CheckFrequency: time.Second * 1,
-		DateFormat:     "20060201_030405",
+		DateFormat:     "20060102_150405",
 	}
 }
 
