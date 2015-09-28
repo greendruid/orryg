@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -11,22 +12,35 @@ import (
 	"github.com/vrischmann/orryg"
 )
 
+func directoriesUsageError() error {
+	var buf bytes.Buffer
+
+	fmt.Fprintf(&buf, "Usage: orryg directories [options] <subcommand> [arguments]\n\n")
+	fmt.Fprintf(&buf, "  Available sub commands\n\n")
+	fmt.Fprintf(&buf, "%20s   %s\n", "list", "List all directories")
+	fmt.Fprintf(&buf, "%20s   %s\n", "add", "Add a directory")
+	fmt.Fprintf(&buf, "%20s   %s\n", "remove", "Remove a directory")
+
+	return errors.New(buf.String())
+}
+
 func directoriesCommand(args ...string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("not enough arguments")
+		return directoriesUsageError()
 	}
 
 	remainingArgs := args[1:]
 
-	switch strings.ToLower(args[0]) {
-	case "list":
+	switch v := strings.ToLower(args[0]); v {
+	case "ls", "list":
 		return directoriesListCommand(remainingArgs...)
 	case "add":
 		return directoriesAddCommand(remainingArgs...)
-	case "remove":
+	case "rm", "remove":
 		return directoriesRemoveCommand(remainingArgs...)
+	default:
+		return fmt.Errorf("unknown directories subcommand '%s'", v)
 	}
-	return nil
 }
 
 func directoriesListCommand(args ...string) error {
