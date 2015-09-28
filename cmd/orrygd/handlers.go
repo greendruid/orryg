@@ -136,5 +136,14 @@ func handleDirectoriesAdd(w http.ResponseWriter, req *http.Request) error {
 }
 
 func handleDirectoriesRemove(w http.ResponseWriter, req *http.Request) error {
-	return writeJSON(w, []byte(`[]`))
+	name := req.URL.Path[len("/directories/remove/"):]
+	if name == "" {
+		return errors.New("no name defined")
+	}
+
+	if err := store.removeDirectory(name); err != nil {
+		return err
+	}
+
+	return writeString(w, "OK")
 }
