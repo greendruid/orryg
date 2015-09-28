@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,22 +13,35 @@ import (
 	"github.com/vrischmann/orryg"
 )
 
+func copiersUsageError() error {
+	var buf bytes.Buffer
+
+	fmt.Fprintf(&buf, "Usage: orryg copiers [options] <subcommand> [arguments]\n\n")
+	fmt.Fprintf(&buf, "  Available sub commands\n\n")
+	fmt.Fprintf(&buf, "%20s   %s\n", "list", "List all copiers")
+	fmt.Fprintf(&buf, "%20s   %s\n", "add", "Add a copier")
+	fmt.Fprintf(&buf, "%20s   %s\n", "remove", "Remove a copier")
+
+	return errors.New(buf.String())
+}
+
 func copiersCommand(args ...string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("not enough arguments")
+		return copiersUsageError()
 	}
 
 	remainingArgs := args[1:]
 
-	switch strings.ToLower(args[0]) {
-	case "list":
+	switch v := strings.ToLower(args[0]); v {
+	case "ls", "list":
 		return copiersListCommand(remainingArgs...)
 	case "add-scp":
 		return copiersAddSCPCommand(remainingArgs...)
-	case "remove":
+	case "rm", "remove":
 		return copiersRemoveCommand(remainingArgs...)
+	default:
+		return fmt.Errorf("unknown copiers subcommand '%s'", v)
 	}
-	return nil
 }
 
 func copiersListCommand(args ...string) error {
@@ -117,7 +131,7 @@ func copiersAddSCPCommand(args ...string) error {
 
 func copiersRemoveCommand(args ...string) error {
 	if len(args) < 1 {
-		return errors.New("please provide the name of the copier to remove")
+		return errors.New("Usage: orryg directories remove <name>")
 	}
 
 	name := args[0]
