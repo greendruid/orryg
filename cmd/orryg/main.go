@@ -66,6 +66,16 @@ func parseConfigAndArgs() error {
 	return nil
 }
 
+func printUsage() {
+	fmt.Println("Usage: orryg [options] <command> [arguments]\n")
+	fmt.Println("  Available commands\n")
+	fmt.Printf("%20s   %s\n", "copiers", "Manipulate the copiers")
+	fmt.Printf("%20s   %s\n", "directories", "Manipulate the directories")
+	fmt.Printf("%20s   %s\n", "settings", "Manipulate the settings")
+	fmt.Println("\n\n  Global options")
+	fmt.Printf("%20s   %s\n\n", "-h", "The adress of orrygd")
+}
+
 func main() {
 	flag.Parse()
 
@@ -81,7 +91,7 @@ func main() {
 	}
 
 	if flag.NArg() < 1 {
-		fmt.Println("please provide a command")
+		printUsage()
 		os.Exit(1)
 		return
 	}
@@ -91,11 +101,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	switch strings.ToLower(flag.Arg(0)) {
+	switch v := strings.ToLower(flag.Arg(0)); v {
 	case "copiers":
 		err = copiersCommand(flag.Args()[1:]...)
 	case "directories":
 		err = directoriesCommand(flag.Args()[1:]...)
+	default:
+		err = fmt.Errorf("unknown command '%s'\n", v)
 	}
 
 	if err != nil {
