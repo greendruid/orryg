@@ -120,5 +120,18 @@ func directoriesAddCommand(args ...string) error {
 }
 
 func directoriesRemoveCommand(args ...string) error {
+	if len(args) < 1 {
+		return errors.New("Usage: orryg directories remove <original path OR archive name>")
+	}
+
+	name := args[0]
+
+	s, err := cl.post("/directories/remove/"+name, nil)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(s)
+
 	return nil
 }
