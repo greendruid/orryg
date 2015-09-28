@@ -182,6 +182,27 @@ func (s *dataStore) mergeDirectory(dir orryg.Directory) error {
 	})
 }
 
+func (s *dataStore) removeDirectory(name string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(directoriesBucket)
+		cursor := bucket.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var d orryg.Directory
+			if err := json.Unmarshal(v, &d); err != nil {
+				return err
+			}
+
+			if d.OriginalPath == name || d.ArchiveName == name {
+				if err := cursor.Delete(); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+}
+
 func (s *dataStore) getDirectories() (res []orryg.Directory, err error) {
 	err = s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(directoriesBucket)
