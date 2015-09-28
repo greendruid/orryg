@@ -52,7 +52,7 @@ func directoriesListCommand(args ...string) error {
 	}
 
 	if len(directories) > 0 {
-		fmt.Println("\nSCP Copiers\n")
+		fmt.Println("\nDirectories\n")
 
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"Original path", "Archive name", "Frequency", "Last backup", "Next backup"})
