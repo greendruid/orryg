@@ -43,7 +43,8 @@ func (e *engine) initCopiers() error {
 		cop := newSCPRemoteCopier(&c.Params)
 
 		if err := cop.Connect(); err != nil {
-			return err
+			log.Printf("unable to connect copier %s. err=%v", c.Name, err)
+			continue
 		}
 
 		e.copiers[c.Name] = cop
