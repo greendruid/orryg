@@ -74,6 +74,36 @@ func (s *dataStore) getSettings() (se orryg.Settings, err error) {
 	return
 }
 
+func (s *dataStore) mergeSettings(se orryg.Settings) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(settingsBucket)
+
+		data := bucket.Get(settingsBucket)
+		if data == nil {
+			data, err := json.Marshal(se)
+			if err != nil {
+				return err
+			}
+
+			return bucket.Put(settingsBucket, data)
+		}
+
+		var cur orryg.Settings
+		if err := json.Unmarshal(data, &cur); err != nil {
+			return err
+		}
+
+		cur.Merge(se)
+
+		data, err := json.Marshal(cur)
+		if err != nil {
+			return err
+		}
+
+		return bucket.Put(settingsBucket, data)
+	})
+}
+
 func (s *dataStore) removeCopier(name string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(copiersBucket)
