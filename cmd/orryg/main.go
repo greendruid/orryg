@@ -106,6 +106,8 @@ func main() {
 		err = copiersCommand(flag.Args()[1:]...)
 	case "directories":
 		err = directoriesCommand(flag.Args()[1:]...)
+	case "settings":
+		err = settingsCommand(flag.Args()[1:]...)
 	default:
 		err = fmt.Errorf("unknown command '%s'\n", v)
 	}

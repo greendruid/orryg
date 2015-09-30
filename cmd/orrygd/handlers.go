@@ -45,6 +45,35 @@ func writeError(w http.ResponseWriter, format string, args ...interface{}) error
 	return err
 }
 
+func handleSettingsList(w http.ResponseWriter, req *http.Request) error {
+	s, err := store.getSettings()
+	if err != nil {
+		return err
+	}
+
+	return marshalAndWriteJSON(w, s)
+}
+
+func handleSettingsChange(w http.ResponseWriter, req *http.Request) error {
+	defer req.Body.Close()
+	data, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+
+	var s orryg.Settings
+	err = json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
+
+	if err := store.mergeSettings(s); err != nil {
+		return err
+	}
+
+	return writeString(w, "OK")
+}
+
 func handleCopiersList(w http.ResponseWriter, req *http.Request) error {
 	scpConfs, err := store.getAllSCPCopierConfs()
 	if err != nil {

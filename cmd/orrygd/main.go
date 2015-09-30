@@ -50,7 +50,8 @@ func main() {
 
 	{
 		router := http.NewServeMux()
-		// TODO(vincent): settings
+		router.HandleFunc("/settings/list", handler(handleSettingsList))
+		router.HandleFunc("/settings/change", handler(handleSettingsChange))
 		router.HandleFunc("/copiers/list", handler(handleCopiersList))
 		router.HandleFunc("/copiers/add", handler(handleCopiersAdd))
 		router.HandleFunc("/copiers/remove/", handler(handleCopiersRemove))
