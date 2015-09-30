@@ -12,6 +12,15 @@ type Settings struct {
 	DateFormat     string        `json:"dateFormat"`
 }
 
+func (s *Settings) Merge(other Settings) {
+	if other.CheckFrequency > 0 {
+		s.CheckFrequency = other.CheckFrequency
+	}
+	if other.DateFormat != "" {
+		s.DateFormat = other.DateFormat
+	}
+}
+
 func DefaultSettings() Settings {
 	return Settings{
 		CheckFrequency: time.Second * 1,
