@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrischmann/orryg"
-
 	"golang.org/x/crypto/ssh"
 )
 
@@ -40,11 +38,11 @@ func (f dummyRemoteCopier) Connect() error { return nil }
 func (f dummyRemoteCopier) Close() error   { return nil }
 
 type scpRemoteCopier struct {
-	params *orryg.SSHParameters
+	params *sshParameters
 	client *ssh.Client
 }
 
-func newSCPRemoteCopier(params *orryg.SSHParameters) remoteCopier {
+func newSCPRemoteCopier(params *sshParameters) remoteCopier {
 	return &scpRemoteCopier{params: params}
 }
 

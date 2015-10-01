@@ -8,12 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/vrischmann/orryg"
 )
 
 type tarball struct {
-	d orryg.Directory
+	d *directory
 
 	tf  *os.File
 	aw  *tar.Writer
@@ -25,7 +23,7 @@ type tarball struct {
 	copied int64
 }
 
-func newTarball(d orryg.Directory) *tarball {
+func newTarball(d *directory) *tarball {
 	return &tarball{d: d}
 }
 

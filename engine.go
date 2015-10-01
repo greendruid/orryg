@@ -4,22 +4,18 @@ import (
 	"fmt"
 	"log"
 	"time"
-
-	"github.com/vrischmann/orryg"
 )
 
 type engine struct {
-	st     *dataStore
-	oodCh  chan orryg.Directory
+	oodCh  chan *directory
 	stopCh chan struct{}
 
 	copiers map[string]remoteCopier
 }
 
-func newEngine(st *dataStore) (*engine, error) {
+func newEngine() (*engine, error) {
 	e := &engine{
-		st:      st,
-		oodCh:   make(chan orryg.Directory),
+		oodCh:   make(chan *directory),
 		stopCh:  make(chan struct{}),
 		copiers: make(map[string]remoteCopier),
 	}
@@ -34,12 +30,11 @@ func newEngine(st *dataStore) (*engine, error) {
 }
 
 func (e *engine) initCopiers() error {
-	confs, err := e.st.getAllSCPCopierConfs()
-	if err != nil {
+	if err := readConfig(); err != nil {
 		return err
 	}
 
-	for _, c := range confs {
+	for _, c := range conf.SCPCopiers {
 		cop := newSCPRemoteCopier(&c.Params)
 
 		if err := cop.Connect(); err != nil {
@@ -57,36 +52,6 @@ func (e *engine) run() {
 loop:
 	for {
 		select {
-		case name := <-e.st.copierRemoved:
-			cop, ok := e.copiers[name]
-			if !ok {
-				continue
-			}
-
-			if err := cop.Close(); err != nil {
-				log.Printf("unable to close copier. err=%v", err)
-			}
-
-			delete(e.copiers, name)
-
-		case conf := <-e.st.copierAdded:
-			switch conf.Type {
-			case orryg.SCPCopierType:
-
-				scpConf := conf.Conf.(orryg.SCPCopierConf)
-				cop := newSCPRemoteCopier(&scpConf.Params)
-
-				if err := cop.Connect(); err != nil {
-					log.Printf("unable to connect copier. err=%v", err)
-					continue
-				}
-
-				e.copiers[scpConf.Name] = cop
-			}
-
-		case <-e.stopCh:
-			break loop
-
 		case id := <-e.oodCh:
 			start := time.Now()
 
@@ -98,13 +63,7 @@ loop:
 				continue
 			}
 
-			settings, err := e.st.getSettings()
-			if err != nil {
-				log.Printf("unable to get settings. err=%v", err)
-				continue
-			}
-
-			name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().Format(settings.DateFormat))
+			name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().Format(conf.DateFormat))
 
 			for _, copier := range e.copiers {
 				err := copier.CopyFromReader(tb, tb.fi.Size(), name)
@@ -121,10 +80,17 @@ loop:
 
 			log.Printf("backed up %s in %s", id.OriginalPath, elapsed)
 
+			// conf.setLastUpdated(id, time.Now())
 			id.LastUpdated = time.Now()
-			if err := e.st.mergeDirectory(id); err != nil {
-				log.Fatalf("unable to merge directory %+v. err=%v", id, err)
+
+			if err := writeConfig(); err != nil {
+				log.Fatalf("unable to write config. err=%v", err)
 			}
+
+			log.Printf("id: %v", id)
+
+		case <-e.stopCh:
+			break loop
 		}
 	}
 }
@@ -143,13 +109,7 @@ func (e *engine) stop() error {
 }
 
 func (e *engine) scheduleOOD() {
-	settings, err := e.st.getSettings()
-	if err != nil {
-		log.Printf("unable to get settings. err=%v", err)
-		return
-	}
-
-	ticker := time.NewTicker(settings.CheckFrequency)
+	ticker := time.NewTicker(conf.CheckFrequency.Duration)
 
 loop:
 	for {
@@ -170,15 +130,14 @@ loop:
 	}
 }
 
-func (e *engine) getOutOfDate() (res []orryg.Directory, err error) {
-	tmp, err := e.st.getDirectories()
-	if err != nil {
-		return
+func (e *engine) getOutOfDate() (res []*directory, err error) {
+	if err := readConfig(); err != nil {
+		return nil, err
 	}
 
-	for _, d := range tmp {
+	for _, d := range conf.Directories {
 		elapsed := time.Now().Sub(d.LastUpdated)
-		if d.LastUpdated.IsZero() || elapsed >= d.Frequency {
+		if d.LastUpdated.IsZero() || elapsed >= d.Frequency.Duration {
 			res = append(res, d)
 		}
 	}
