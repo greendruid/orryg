@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/vrischmann/jsonutil"
-	"github.com/vrischmann/userdir"
 )
 
 type sshParameters struct {
@@ -44,32 +40,3 @@ type config struct {
 // 		}
 // 	}
 // }
-
-var configPath = filepath.Join(userdir.GetConfigHome(), "orryg", "config.json")
-
-func readConfig() error {
-	f, err := os.Open(configPath)
-	if err != nil {
-		return err
-	}
-
-	dec := json.NewDecoder(f)
-
-	return dec.Decode(&conf)
-}
-
-func writeConfig() error {
-	f, err := os.OpenFile(configPath, os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(&conf, "", "    ")
-	if err != nil {
-		return err
-	}
-
-	_, err = f.Write(data)
-
-	return err
-}

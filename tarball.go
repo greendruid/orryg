@@ -150,6 +150,10 @@ func (t *tarball) stat() {
 	t.fi, t.err = t.ef.Stat()
 }
 
+func (t *tarball) Reset() {
+	_, t.err = t.ef.Seek(0, os.SEEK_SET)
+}
+
 func (t *tarball) Read(p []byte) (int, error) {
 	return t.ef.Read(p)
 }
