@@ -95,6 +95,13 @@ func (e *engine) backupOne(id *directory) {
 
 	e.logger.Infof(1, "making tarball of %s", id.OriginalPath)
 	tb := newTarball(id)
+	defer func() {
+		// Cleanup the tarball
+		if err := tb.Close(); err != nil {
+			e.logger.Errorf(1, "unable to close tarball. err=%v", err)
+		}
+	}()
+
 	if err := tb.process(); err != nil {
 		e.logger.Infof(1, "unable to make tarball. err=%v", err)
 		return
@@ -111,16 +118,10 @@ func (e *engine) backupOne(id *directory) {
 		err := copier.CopyFromReader(tb, tb.fi.Size(), name)
 		if err != nil {
 			e.logger.Errorf(1, "unable to copy the tarball to the remote host. err=%v", err)
-			continue
+			return // don't continue if even one copier is not working.
 		}
 
 		e.logger.Infof(1, "done copying %s with copier %s", name, copier.name)
-	}
-
-	// Cleanup the tarball
-	if err := tb.Close(); err != nil {
-		e.logger.Errorf(1, "unable to close tarball. err=%v", err)
-		return
 	}
 
 	e.logger.Infof(1, "backed up %s in %s", id.OriginalPath, time.Now().Sub(start))
