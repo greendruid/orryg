@@ -135,13 +135,12 @@ func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 			break
 		}
 
-		c.logger.Errorf("unable to create SSH session. err=%v", err)
-		c.logger.Infof("trying to reconnect SSH client.")
+		c.logger.Errorf(1, "unable to create SSH session. err=%v", err)
+		c.logger.Infof(1, "trying to reconnect SSH client.")
 
 		if err = c.Connect(); err != nil {
-			c.logger.Errorf("unable to reconnect SSH client, retrying later. err=%v", err)
+			c.logger.Errorf(1, "unable to reconnect SSH client, retrying later. err=%v", err)
 			bo.sleep()
-
 		}
 	}
 

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -64,6 +66,34 @@ loop:
 	return
 }
 
+func getLogFile(elog debug.Log) io.Writer {
+	dir := filepath.Join(userdir.GetDataHome(), "orryg")
+
+	{
+		fi, err := os.Stat(dir)
+		if err != nil && os.IsNotExist(err) {
+			os.MkdirAll(dir, 0700)
+		} else if err != nil && !os.IsNotExist(err) {
+			elog.Warning(1, fmt.Sprintf("unable to create log directory %s. err=%v", dir, err))
+			return ioutil.Discard
+		} else {
+			if !fi.IsDir() {
+				elog.Warning(1, fmt.Sprintf("unable to create log directory %s because it's already a file", dir))
+				return ioutil.Discard
+			}
+		}
+	}
+
+	file := filepath.Join(dir, "main.log")
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		elog.Warning(1, fmt.Sprintf("unable to create log file %s. err=%v", file, err))
+		return ioutil.Discard
+	}
+
+	return f
+}
+
 func runService(name string, isDebug bool) {
 	var elog debug.Log
 	var err error
@@ -79,7 +109,10 @@ func runService(name string, isDebug bool) {
 		defer elog.Close()
 	}
 
-	logger := &logger{elog: elog}
+	logger := &logger{
+		elog:   elog,
+		stdLog: log.New(getLogFile(elog), "orryg: ", log.LstdFlags),
+	}
 
 	{
 		_, err = os.Stat(configPath)
