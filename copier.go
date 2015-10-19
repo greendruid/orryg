@@ -120,11 +120,31 @@ func (c *scpRemoteCopier) addDirectory(w io.WriteCloser, r io.Reader, name strin
 	return nil
 }
 
-func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string) error {
-	session, err := c.client.NewSession()
-	if err != nil {
-		return err
+func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string) (err error) {
+	bo := backoff{
+		duration:    time.Second,
+		maxDuration: time.Second * 30,
 	}
+
+	var session *ssh.Session
+
+	// Wait indefinitely to create the session
+	for {
+		session, err = c.client.NewSession()
+		if err == nil {
+			break
+		}
+
+		c.logger.Errorf("unable to create SSH session. err=%v", err)
+		c.logger.Infof("trying to reconnect SSH client.")
+
+		if err = c.Connect(); err != nil {
+			c.logger.Errorf("unable to reconnect SSH client, retrying later. err=%v", err)
+			bo.sleep()
+
+		}
+	}
+
 	defer session.Close()
 
 	go func() {
