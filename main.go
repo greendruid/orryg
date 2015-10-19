@@ -95,6 +95,8 @@ func getLogFile(elog debug.Log) io.Writer {
 }
 
 func runService(name string, isDebug bool) {
+	go http.ListenAndServe(":6060", nil)
+
 	var elog debug.Log
 	var err error
 	{
@@ -141,12 +143,7 @@ func runService(name string, isDebug bool) {
 		{
 			logger.Infof(1, "starting engine")
 
-			var err error
-			e, err = newEngine(logger)
-			if err != nil {
-				logger.Errorf(1, err.Error())
-				return
-			}
+			e = newEngine(logger)
 			go e.run()
 
 			logger.Infof(1, "engine started")
@@ -323,8 +320,6 @@ func usage(errmsg string) {
 }
 
 func main() {
-	go http.ListenAndServe(":6060", nil)
-
 	const svcName = "Orryg"
 
 	isIntSess, err := svc.IsAnInteractiveSession()

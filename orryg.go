@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/vrischmann/jsonutil"
@@ -26,6 +27,12 @@ type directory struct {
 	LastUpdated  time.Time         `json:"lastUpdated,omitempty"`
 }
 
+func (d directory) String() string {
+	return fmt.Sprintf("{frequency: %s, originalPath: %s, archiveName: %s, lastUpdated: %s}",
+		d.Frequency, d.OriginalPath, d.ArchiveName, d.LastUpdated,
+	)
+}
+
 type config struct {
 	SCPCopiers     []scpCopierConf   `json:"scpCopiers"`
 	Directories    []*directory      `json:"directories"`
@@ -33,10 +40,10 @@ type config struct {
 	DateFormat     string            `json:"dateFormat"`
 }
 
-// func (c *config) setLastUpdated(d *directory, t time.Time) {
-// 	for _, v := range c.Directories {
-// 		if v.OriginalPath == d.OriginalPath {
-// 			v.LastUpdated = t
-// 		}
-// 	}
-// }
+func (c *config) update(id *directory) {
+	for _, v := range c.Directories {
+		if v.ArchiveName == id.ArchiveName {
+			v.LastUpdated = time.Now()
+		}
+	}
+}
