@@ -109,8 +109,6 @@ loop:
 	for {
 		select {
 		case <-backupCh:
-			e.logger.Infof(1, "starting backup")
-
 			ood, err := e.getOutOfDate()
 			if err != nil {
 				e.logger.Errorf(1, "unable to get out of date backups. err=%v", err)
@@ -121,11 +119,7 @@ loop:
 				e.backupOne(id)
 			}
 
-			e.logger.Infof(1, "backup done")
-
 		case <-cleanupCh:
-			e.logger.Infof(1, "starting cleanup")
-
 			directories, err := e.getExpirable()
 			if err != nil {
 				e.logger.Errorf(1, "unable to get expirable backups. err=%v", err)
@@ -135,8 +129,6 @@ loop:
 			for _, id := range directories {
 				e.expireOne(id)
 			}
-
-			e.logger.Infof(1, "cleanup done")
 
 		case <-e.stopCh:
 			break loop
