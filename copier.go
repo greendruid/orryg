@@ -3,90 +3,31 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/davidmz/go-pageant"
-
-	"golang.org/x/crypto/ssh"
 )
 
 type scpRemoteCopier struct {
 	logger  *logger
 	scratch [0xFF]byte
 
-	name   string
-	params *sshParameters
-	client *ssh.Client
+	name       string
+	backupsDir string
+	client     *sshClient
 }
 
 func (c *scpRemoteCopier) String() string {
-	return fmt.Sprintf("{name: %s, host: %s, port: %d, user: %s}",
-		c.name, c.params.Host, c.params.Port, c.params.User,
-	)
+	return fmt.Sprintf("{name: %s, client: %s}", c.name, c.client)
 }
 
 func newSCPRemoteCopier(logger *logger, name string, params *sshParameters) *scpRemoteCopier {
 	return &scpRemoteCopier{
-		logger: logger,
-		name:   name,
-		params: params,
+		logger:     logger,
+		name:       name,
+		backupsDir: params.BackupsDir,
+		client:     newSSHClient(logger, params),
 	}
-}
-
-func (c *scpRemoteCopier) Connect() (err error) {
-	var signers []ssh.Signer
-	{
-		if pageant.Available() {
-			sshAgent := pageant.New()
-			pageantSigners, err := sshAgent.Signers()
-			if err != nil {
-				return err
-			}
-
-			signers = pageantSigners
-		}
-
-		if c.params.PrivateKeyFile != "" {
-			privateKeyBytes, err := ioutil.ReadFile(c.params.PrivateKeyFile)
-			if err != nil {
-				return err
-			}
-
-			signer, err := ssh.ParsePrivateKey(privateKeyBytes)
-			if err != nil {
-				return err
-			}
-			signers = append(signers, signer)
-		}
-	}
-
-	clientConfig := ssh.ClientConfig{
-		User: c.params.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signers...),
-		},
-	}
-
-	addr := fmt.Sprintf("%s:%d", c.params.Host, c.params.Port)
-
-	conn, err := net.DialTimeout("tcp", addr, time.Second*5)
-	if err != nil {
-		return err
-	}
-
-	sshc, chans, reqs, err := ssh.NewClientConn(conn, addr, &clientConfig)
-	if err != nil {
-		return err
-	}
-
-	c.client = ssh.NewClient(sshc, chans, reqs)
-
-	return nil
 }
 
 func (c *scpRemoteCopier) readError(r io.Reader, code byte) error {
@@ -121,29 +62,7 @@ func (c *scpRemoteCopier) addDirectory(w io.WriteCloser, r io.Reader, name strin
 }
 
 func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string) (err error) {
-	bo := backoff{
-		duration:    time.Second,
-		maxDuration: time.Second * 30,
-	}
-
-	var session *ssh.Session
-
-	// Wait indefinitely to create the session
-	for {
-		session, err = c.client.NewSession()
-		if err == nil {
-			break
-		}
-
-		c.logger.Errorf(1, "unable to create SSH session. err=%v", err)
-		c.logger.Infof(1, "trying to reconnect SSH client.")
-
-		if err = c.Connect(); err != nil {
-			c.logger.Errorf(1, "unable to reconnect SSH client, retrying later. err=%v", err)
-			bo.sleep()
-		}
-	}
-
+	session := c.client.getValidSession()
 	defer session.Close()
 
 	go func() {
@@ -220,7 +139,7 @@ func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 		}
 	}()
 
-	return session.Run(fmt.Sprintf("/usr/bin/scp -tr %s", c.params.BackupsDir))
+	return session.Run(fmt.Sprintf("/usr/bin/scp -tr %s", c.backupsDir))
 }
 
 func (c *scpRemoteCopier) Close() error {
