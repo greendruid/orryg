@@ -55,21 +55,27 @@ This is the reference example configuration:
             {
                 "frequency": "6h0m0s",
                 "originalPath": "C:/Users/myuser/Documents",
+                "maxBackups": 10,
                 "archiveName": "my_documents"
             },
             {
                 "frequency": "6h0m0s",
                 "originalPath": "C:/Users/myuser/Pictures",
+                "maxBackupAge": "72h",
                 "archiveName": "my_pictures"
             }
         ],
         "checkFrequency": "10m0s",
+        "cleanupFrequency": "10m0s",
         "dateFormat": "20060201_150405"
     }
 
-There are two parameters not immediately obvious:
+There are some parameters that are not immediately obvious:
 
+  * *maxBackups* is the maximum number of backups for this directory on each copier. Orryg removes the oldest backups first.
+  * *maxBackupAge* is the oldest a backup can be. If you set this to say 24h, Orryg will remove everything that is older than that.
   * *checkFrequency* is the interval at which Orryg checks if there are out of date directories.
+  * *cleanupFrequency* is the interval at which Orryg checks if there are expired backups to delete.
   * *dateFormat* is the format used for the date in the archive name in the backups. It is not a real date.
     * It's based on the date 01/02/2006 15:05:05. You can use any format you want as long as you use the correct numbers.
     * If you have a frequency less than a day, make sure your format includes the hour. Same with minutes.
