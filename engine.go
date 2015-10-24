@@ -13,7 +13,8 @@ type engine struct {
 
 	stopCh chan struct{}
 
-	copiers map[string]*scpRemoteCopier
+	copiers  map[string]*scpRemoteCopier
+	cleaners map[string]*cleaner
 }
 
 func newEngine(logger *logger) *engine {
@@ -24,9 +25,7 @@ func newEngine(logger *logger) *engine {
 	}
 }
 
-func (e *engine) initCopiers() error {
-	e.logger.Infof(1, "initializing copiers")
-
+func (e *engine) init() error {
 	if err := e.readConfig(); err != nil {
 		return err
 	}
@@ -39,19 +38,59 @@ func (e *engine) initCopiers() error {
 		e.copiers = make(map[string]*scpRemoteCopier)
 	}
 
+	// Close and clean the existing cleaners
+	{
+		for _, v := range e.cleaners {
+			v.Close()
+		}
+		e.cleaners = make(map[string]*cleaner)
+	}
+
 	for _, c := range e.conf.SCPCopiers {
 		params := c.Params
-		cop := newSCPRemoteCopier(e.logger, c.Name, &params)
 
-		if err := cop.Connect(); err != nil {
-			e.logger.Infof(1, "unable to connect copier %s. err=%v", c, err)
-			continue
+		{
+			cop := newSCPRemoteCopier(e.logger, c.Name, &params)
+
+			if err := cop.client.connect(); err != nil {
+				e.logger.Infof(1, "unable to connect copier %s. err=%v", c, err)
+				continue
+			}
+
+			e.copiers[c.Name] = cop
 		}
 
-		e.copiers[c.Name] = cop
+		{
+			cleaner := newCleaner(e.logger, &params)
+
+			if err := cleaner.client.connect(); err != nil {
+				e.logger.Infof(1, "unable to connect cleaner %s. err=%v", c, err)
+				continue
+			}
+
+			e.cleaners[c.Name] = cleaner
+		}
 	}
 
 	return nil
+}
+
+func fanInWithImmediateStart(in <-chan time.Time) <-chan struct{} {
+	forceCh := make(chan struct{}, 1)
+	forceCh <- struct{}{}
+
+	ch := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-in:
+				ch <- struct{}{}
+			case <-forceCh:
+				ch <- struct{}{}
+			}
+		}
+	}()
+	return ch
 }
 
 func (e *engine) run() {
@@ -60,36 +99,44 @@ func (e *engine) run() {
 		return
 	}
 
-	ticker := time.NewTicker(e.conf.CheckFrequency.Duration)
+	backupTicker := time.NewTicker(e.conf.CheckFrequency.Duration)
+	cleanupTicker := time.NewTicker(e.conf.CleanupFrequency.Duration)
 
-	forceCh := make(chan struct{}, 1)
-	forceCh <- struct{}{}
-
-	ch := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				ch <- struct{}{}
-			case <-forceCh:
-				ch <- struct{}{}
-			}
-		}
-	}()
+	backupCh := fanInWithImmediateStart(backupTicker.C)
+	cleanupCh := fanInWithImmediateStart(cleanupTicker.C)
 
 loop:
 	for {
 		select {
-		case <-ch:
+		case <-backupCh:
+			e.logger.Infof(1, "starting backup")
+
 			ood, err := e.getOutOfDate()
 			if err != nil {
-				e.logger.Infof(1, "unable to get out of date backups. err=%v", err)
+				e.logger.Errorf(1, "unable to get out of date backups. err=%v", err)
 				continue loop
 			}
 
 			for _, id := range ood {
 				e.backupOne(id)
 			}
+
+			e.logger.Infof(1, "backup done")
+
+		case <-cleanupCh:
+			e.logger.Infof(1, "starting cleanup")
+
+			directories, err := e.getExpirable()
+			if err != nil {
+				e.logger.Errorf(1, "unable to get expirable backups. err=%v", err)
+				continue loop
+			}
+
+			for _, id := range directories {
+				e.expireOne(id)
+			}
+
+			e.logger.Infof(1, "cleanup done")
 
 		case <-e.stopCh:
 			break loop
@@ -99,7 +146,7 @@ loop:
 
 func (e *engine) backupOne(id *directory) {
 	// First init the copiers because the user might have added copiers to the config file.
-	if err := e.initCopiers(); err != nil {
+	if err := e.init(); err != nil {
 		e.logger.Errorf(1, "unable to init copiers. err=%v", err)
 		return
 	}
@@ -123,7 +170,7 @@ func (e *engine) backupOne(id *directory) {
 	}
 	e.logger.Infof(1, "done making tarball of %s", id.OriginalPath)
 
-	name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().Format(e.conf.DateFormat))
+	name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().UTC().Format(e.conf.DateFormat))
 
 	for _, copier := range e.copiers {
 		tb.Reset()
@@ -151,6 +198,19 @@ func (e *engine) backupOne(id *directory) {
 	}
 }
 
+func (e *engine) expireOne(id *directory) {
+	if err := e.init(); err != nil {
+		e.logger.Errorf(1, "unable to init copiers. err=%v", err)
+		return
+	}
+
+	for _, cleaner := range e.cleaners {
+		if err := cleaner.cleanAllExpiredBackups(id, e.conf.DateFormat); err != nil {
+			e.logger.Errorf(1, "unable to clean all expired backups. err=%v", err)
+		}
+	}
+}
+
 func (e *engine) stop() error {
 	for _, c := range e.copiers {
 		if err := c.Close(); err != nil {
@@ -171,6 +231,20 @@ func (e *engine) getOutOfDate() (res []*directory, err error) {
 	for _, d := range e.conf.Directories {
 		elapsed := time.Now().Sub(d.LastUpdated)
 		if d.LastUpdated.IsZero() || elapsed >= d.Frequency.Duration {
+			res = append(res, d)
+		}
+	}
+
+	return
+}
+
+func (e *engine) getExpirable() (res []*directory, err error) {
+	if err := e.readConfig(); err != nil {
+		return nil, err
+	}
+
+	for _, d := range e.conf.Directories {
+		if d.MaxBackups > 0 || d.MaxBackupAge.Duration > 0 {
 			res = append(res, d)
 		}
 	}
