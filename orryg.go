@@ -24,6 +24,8 @@ type directory struct {
 	Frequency    jsonutil.Duration `json:"frequency"`
 	OriginalPath string            `json:"originalPath"`
 	ArchiveName  string            `json:"archiveName"`
+	MaxBackups   int               `json:"maxBackups"`
+	MaxBackupAge jsonutil.Duration `json:"maxBackupAge"`
 	LastUpdated  time.Time         `json:"lastUpdated,omitempty"`
 }
 
@@ -34,10 +36,11 @@ func (d directory) String() string {
 }
 
 type config struct {
-	SCPCopiers     []scpCopierConf   `json:"scpCopiers"`
-	Directories    []*directory      `json:"directories"`
-	CheckFrequency jsonutil.Duration `json:"checkFrequency"`
-	DateFormat     string            `json:"dateFormat"`
+	SCPCopiers       []scpCopierConf   `json:"scpCopiers"`
+	Directories      []*directory      `json:"directories"`
+	CheckFrequency   jsonutil.Duration `json:"checkFrequency"`
+	CleanupFrequency jsonutil.Duration `json:"cleanupFrequency"`
+	DateFormat       string            `json:"dateFormat"`
 }
 
 func (c *config) update(id *directory) {
