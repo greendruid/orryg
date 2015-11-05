@@ -3,50 +3,42 @@ package main
 import (
 	"fmt"
 	"time"
-
-	"github.com/vrischmann/jsonutil"
 )
 
 type sshParameters struct {
-	User           string `json:"user"`
-	Host           string `json:"host"`
-	Port           int    `json:"port"`
-	PrivateKeyFile string `json:"privateKeyFile"`
-	BackupsDir     string `json:"backupsDir"`
+	User           string
+	Host           string
+	Port           int
+	PrivateKeyFile string
+	BackupsDir     string
 }
 
 type scpCopierConf struct {
-	Name   string        `json:"name"`
-	Params sshParameters `json:"params"`
+	Name   string
+	Params sshParameters
 }
 
-type directory struct {
-	Frequency    jsonutil.Duration `json:"frequency"`
-	OriginalPath string            `json:"originalPath"`
-	ArchiveName  string            `json:"archiveName"`
-	MaxBackups   int               `json:"maxBackups"`
-	MaxBackupAge jsonutil.Duration `json:"maxBackupAge"`
-	LastUpdated  time.Time         `json:"lastUpdated,omitempty"`
-}
-
-func (d directory) String() string {
-	return fmt.Sprintf("{frequency: %s, originalPath: %s, archiveName: %s, lastUpdated: %s}",
-		d.Frequency, d.OriginalPath, d.ArchiveName, d.LastUpdated,
+func (c scpCopierConf) String() string {
+	const format = "{name: %s, user: %s, host: %s, port: %d, privateKeyFile: %s, backupsDir: %s}"
+	return fmt.Sprintf(format,
+		c.Name, c.Params.User, c.Params.Host, c.Params.Port,
+		c.Params.PrivateKeyFile, c.Params.BackupsDir,
 	)
 }
 
-type config struct {
-	SCPCopiers       []scpCopierConf   `json:"scpCopiers"`
-	Directories      []*directory      `json:"directories"`
-	CheckFrequency   jsonutil.Duration `json:"checkFrequency"`
-	CleanupFrequency jsonutil.Duration `json:"cleanupFrequency"`
-	DateFormat       string            `json:"dateFormat"`
+type directory struct {
+	Frequency    time.Duration
+	OriginalPath string
+	ArchiveName  string
+	MaxBackups   int
+	MaxBackupAge time.Duration
+	LastUpdated  time.Time
 }
 
-func (c *config) update(id *directory) {
-	for _, v := range c.Directories {
-		if v.ArchiveName == id.ArchiveName {
-			v.LastUpdated = time.Now()
-		}
-	}
+func (d directory) String() string {
+	const format = "{frequency: %s, originalPath: %s, archiveName: %s, lastUpdated: %s}"
+	return fmt.Sprintf(format,
+		d.Frequency, d.OriginalPath,
+		d.ArchiveName, d.LastUpdated,
+	)
 }

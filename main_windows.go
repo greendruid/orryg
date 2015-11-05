@@ -1,3 +1,4 @@
+// +build windows
 package main
 
 import (
@@ -116,14 +117,18 @@ func runService(name string, isDebug bool) {
 		stdLog: log.New(getLogFile(elog), "orryg: ", log.LstdFlags),
 	}
 
+	// TODO(vincent): configuration validation at start up ?
 	{
-		_, err = os.Stat(configPath)
-		if err != nil && os.IsNotExist(err) {
-			logger.Errorf(1, "configuration file at %s does not exist, please create it", configPath)
+		conf := newWindowsConfiguration()
+		s, err := conf.DumpConfig()
+		if err != nil {
+			logger.Errorf(1, "there was a problem while dumping the configuration. err=%v", err)
 			return
-		} else if err != nil {
-			logger.Errorf(1, "unable to read configuration file at %s. err=%v", configPath, err)
-			return
+		}
+
+		logger.Infof(1, "configuration dump")
+		for _, line := range s {
+			logger.Infof(1, "%s", line)
 		}
 	}
 
@@ -343,8 +348,11 @@ func main() {
 
 	cmd := strings.ToLower(os.Args[1])
 	switch cmd {
+	case "configure":
+		cp := configurePrompt{conf: newWindowsConfiguration()}
+		cp.run()
+		return
 	case "debug":
-		configPath = filepath.Join(userdir.GetConfigHome(), "orryg", "config.json")
 		runService(svcName, true)
 		return
 	case "install":

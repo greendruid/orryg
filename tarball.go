@@ -11,7 +11,7 @@ import (
 )
 
 type tarball struct {
-	d *directory
+	d directory
 
 	tf  *os.File
 	aw  *tar.Writer
@@ -23,7 +23,7 @@ type tarball struct {
 	copied int64
 }
 
-func newTarball(d *directory) *tarball {
+func newTarball(d directory) *tarball {
 	return &tarball{d: d}
 }
 

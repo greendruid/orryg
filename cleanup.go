@@ -24,7 +24,7 @@ func newCleaner(logger *logger, params *sshParameters) *cleaner {
 	}
 }
 
-func (c *cleaner) cleanAllExpiredBackups(id *directory, dateFormat string) error {
+func (c *cleaner) cleanAllExpiredBackups(id directory, dateFormat string) error {
 	filenames, err := c.getExpiredBackups(id, dateFormat)
 	if err != nil {
 		return fmt.Errorf("unable to get expired backups for %v. err=%v", id, err)
@@ -56,7 +56,7 @@ func (c *cleaner) clean(filename string) error {
 	return nil
 }
 
-func (c *cleaner) getExpiredBackups(d *directory, dateFormat string) (res []string, err error) {
+func (c *cleaner) getExpiredBackups(d directory, dateFormat string) (res []string, err error) {
 	session := c.client.getValidSession()
 	defer session.Close()
 
@@ -100,8 +100,8 @@ func (c *cleaner) getExpiredBackups(d *directory, dateFormat string) (res []stri
 	}
 
 	// If we configured a TTL
-	if d.MaxBackupAge.Duration > 0 {
-		t := time.Now().UTC().Add(-d.MaxBackupAge.Duration)
+	if d.MaxBackupAge > 0 {
+		t := time.Now().UTC().Add(-d.MaxBackupAge)
 		// return the position of the last element which has to be expired
 		// takes care of sorting the elements.
 		lastBefore := els.lastBefore(t)

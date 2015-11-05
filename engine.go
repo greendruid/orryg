@@ -1,15 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 )
 
 type engine struct {
 	logger *logger
-	conf   config
+	conf   configuration
 
 	stopCh chan struct{}
 
@@ -26,10 +24,6 @@ func newEngine(logger *logger) *engine {
 }
 
 func (e *engine) init() error {
-	if err := e.readConfig(); err != nil {
-		return err
-	}
-
 	// Close and clean the existing copiers
 	{
 		for _, v := range e.copiers {
@@ -46,7 +40,11 @@ func (e *engine) init() error {
 		e.cleaners = make(map[string]*cleaner)
 	}
 
-	for _, c := range e.conf.SCPCopiers {
+	copiers, err := e.conf.ReadSCPCopiers()
+	if err != nil {
+		return fmt.Errorf("unable to read copiers configuration. err=%v", err)
+	}
+	for _, c := range copiers {
 		params := c.Params
 
 		{
@@ -94,13 +92,20 @@ func fanInWithImmediateStart(in <-chan time.Time) <-chan struct{} {
 }
 
 func (e *engine) run() {
-	if err := e.readConfig(); err != nil {
-		e.logger.Errorf(1, "unable to read configuration, bailing. err=%v", err)
-		return
+	checkFrequency, err := e.conf.ReadCheckFrequency()
+	if err != nil {
+		e.logger.Errorf(1, "unable to read check frequency, using default value of 1 minute. err=%v", err)
+		checkFrequency = time.Minute
 	}
 
-	backupTicker := time.NewTicker(e.conf.CheckFrequency.Duration)
-	cleanupTicker := time.NewTicker(e.conf.CleanupFrequency.Duration)
+	cleanupFrequency, err := e.conf.ReadCleanupFrequency()
+	if err != nil {
+		e.logger.Errorf(1, "unable to read cleanup frequency, using default value of 1 minute. err=%v", err)
+		cleanupFrequency = time.Minute
+	}
+
+	backupTicker := time.NewTicker(checkFrequency)
+	cleanupTicker := time.NewTicker(cleanupFrequency)
 
 	backupCh := fanInWithImmediateStart(backupTicker.C)
 	cleanupCh := fanInWithImmediateStart(cleanupTicker.C)
@@ -136,7 +141,7 @@ loop:
 	}
 }
 
-func (e *engine) backupOne(id *directory) {
+func (e *engine) backupOne(id directory) {
 	// First init the copiers because the user might have added copiers to the config file.
 	if err := e.init(); err != nil {
 		e.logger.Errorf(1, "unable to init copiers. err=%v", err)
@@ -157,12 +162,18 @@ func (e *engine) backupOne(id *directory) {
 	}()
 
 	if err := tb.process(); err != nil {
-		e.logger.Infof(1, "unable to make tarball. err=%v", err)
+		e.logger.Errorf(1, "unable to make tarball. err=%v", err)
 		return
 	}
 	e.logger.Infof(1, "done making tarball of %s", id.OriginalPath)
 
-	name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().UTC().Format(e.conf.DateFormat))
+	dateFormat, err := e.conf.ReadDateFormat()
+	if err != nil {
+		e.logger.Errorf(1, "unable to read date format. err=%v", err)
+		return
+	}
+
+	name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().UTC().Format(dateFormat))
 
 	for _, copier := range e.copiers {
 		tb.Reset()
@@ -182,22 +193,26 @@ func (e *engine) backupOne(id *directory) {
 
 	// Persist the new config
 	{
-		e.conf.update(id)
-
-		if err := e.writeConfig(); err != nil {
-			e.logger.Errorf(1, "unable to write config. err=%v", err)
+		if err := e.conf.UpdateLastUpdated(id); err != nil {
+			e.logger.Errorf(1, "unable to update the last updated field of %v. err=%v", id, err)
 		}
 	}
 }
 
-func (e *engine) expireOne(id *directory) {
+func (e *engine) expireOne(id directory) {
 	if err := e.init(); err != nil {
 		e.logger.Errorf(1, "unable to init copiers. err=%v", err)
 		return
 	}
 
+	dateFormat, err := e.conf.ReadDateFormat()
+	if err != nil {
+		e.logger.Errorf(1, "unable to read date format. err=%v", err)
+		return
+	}
+
 	for _, cleaner := range e.cleaners {
-		if err := cleaner.cleanAllExpiredBackups(id, e.conf.DateFormat); err != nil {
+		if err := cleaner.cleanAllExpiredBackups(id, dateFormat); err != nil {
 			e.logger.Errorf(1, "unable to clean all expired backups. err=%v", err)
 		}
 	}
@@ -215,14 +230,15 @@ func (e *engine) stop() error {
 	return nil
 }
 
-func (e *engine) getOutOfDate() (res []*directory, err error) {
-	if err := e.readConfig(); err != nil {
-		return nil, err
+func (e *engine) getOutOfDate() (res []directory, err error) {
+	directories, err := e.conf.ReadDirectories()
+	if err != nil {
+		return nil, fmt.Errorf("unable to read directories configuration. err=%v", err)
 	}
 
-	for _, d := range e.conf.Directories {
+	for _, d := range directories {
 		elapsed := time.Now().Sub(d.LastUpdated)
-		if d.LastUpdated.IsZero() || elapsed >= d.Frequency.Duration {
+		if d.LastUpdated.IsZero() || elapsed >= d.Frequency {
 			res = append(res, d)
 		}
 	}
@@ -230,49 +246,17 @@ func (e *engine) getOutOfDate() (res []*directory, err error) {
 	return
 }
 
-func (e *engine) getExpirable() (res []*directory, err error) {
-	if err := e.readConfig(); err != nil {
-		return nil, err
+func (e *engine) getExpirable() (res []directory, err error) {
+	directories, err := e.conf.ReadDirectories()
+	if err != nil {
+		return nil, fmt.Errorf("unable to read directories configuration. err=%v", err)
 	}
 
-	for _, d := range e.conf.Directories {
-		if d.MaxBackups > 0 || d.MaxBackupAge.Duration > 0 {
+	for _, d := range directories {
+		if d.MaxBackups > 0 || d.MaxBackupAge > 0 {
 			res = append(res, d)
 		}
 	}
 
 	return
-}
-
-var configPath = "C:/Windows/System32/config/systemprofile/AppData/Roaming/orryg/config.json"
-
-func (e *engine) readConfig() error {
-	e.conf = config{}
-
-	f, err := os.Open(configPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	dec := json.NewDecoder(f)
-
-	return dec.Decode(&e.conf)
-}
-
-func (e *engine) writeConfig() error {
-	f, err := os.OpenFile(configPath, os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	data, err := json.MarshalIndent(&e.conf, "", "    ")
-	if err != nil {
-		return err
-	}
-
-	_, err = f.Write(data)
-
-	return err
 }
