@@ -109,15 +109,15 @@ func (c *windowsConfiguration) readDirectory(name string) (d directory, err erro
 		archiveName := der.musts(key.GetStringValue("ArchiveName"))
 		maxBackups := der.musti(key.GetIntegerValue("MaxBackups"))
 		maxBackupAge := der.musti(key.GetIntegerValue("MaxBackupAge"))
-		lastUpdated := der.musts(key.GetStringValue("LastUpdated"))
+		lastUpdated := der.ignores(key.GetStringValue("LastUpdated"))
 
 		if der.err != nil {
 			return der.err
 		}
 
-		lastUpdatedTime, r := time.Parse(time.RFC3339, lastUpdated)
-		if r != nil {
-			lastUpdatedTime = time.Time{}
+		var lastUpdatedTime time.Time
+		if lastUpdated != "" {
+			lastUpdatedTime, _ = time.Parse(time.RFC3339, lastUpdated)
 		}
 
 		d = directory{
@@ -344,6 +344,10 @@ func (d *delayedErrorRegKey) must(err error) {
 		return
 	}
 	d.err = err
+}
+
+func (d *delayedErrorRegKey) ignores(s string, _ uint32, _ error) string {
+	return s
 }
 
 func (d *delayedErrorRegKey) musts(s string, vt uint32, err error) string {
