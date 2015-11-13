@@ -34,7 +34,7 @@ func (c *windowsConfiguration) ReadSCPCopiers() (res []scpCopierConf, err error)
 }
 
 func withKey(keyName string, fn func(key registry.Key) error) error {
-	key, _, err := registry.CreateKey(registry.CURRENT_USER, `SOFTWARE\Orryg`+keyName, registry.WRITE|registry.READ)
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, `SOFTWARE\Orryg`+keyName, registry.ALL_ACCESS)
 	if err != nil {
 		return err
 	}
