@@ -246,7 +246,7 @@ func (c *windowsConfiguration) WriteDirectory(d directory) error {
 		der.must(key.SetStringValue("ArchiveName", d.ArchiveName))
 		der.must(key.SetDWordValue("MaxBackups", uint32(d.MaxBackups)))
 		der.must(key.SetQWordValue("MaxBackupAge", uint64(d.MaxBackupAge)))
-		der.must(key.SetStringValue("LastUpdated", d.LastUpdated.String()))
+		der.must(key.SetStringValue("LastUpdated", d.LastUpdated.Format(time.RFC3339)))
 
 		return der.err
 	})
@@ -272,7 +272,7 @@ func (c *windowsConfiguration) WriteDateFormat(s string) error {
 
 func (c *windowsConfiguration) UpdateLastUpdated(d directory) error {
 	return withKey("", func(key registry.Key) error {
-		return key.SetStringValue("LastUpdated", d.LastUpdated.String())
+		return key.SetStringValue("LastUpdated", d.LastUpdated.Format(time.RFC3339))
 	})
 }
 
