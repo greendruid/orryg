@@ -74,6 +74,9 @@ func (c *windowsConfiguration) readSCPCopiersNames() (vals []string, err error) 
 	err = withKey("", func(key registry.Key) error {
 		var r error
 		vals, _, r = key.GetStringsValue("SCPCopiersNames")
+		if r == registry.ErrNotExist {
+			return nil
+		}
 		return r
 	})
 	return
@@ -135,6 +138,9 @@ func (c *windowsConfiguration) readDirectoriesNames() (vals []string, err error)
 	err = withKey("", func(key registry.Key) error {
 		var r error
 		vals, _, r = key.GetStringsValue("DirectoriesNames")
+		if r == registry.ErrNotExist {
+			return nil
+		}
 		return r
 	})
 	return
@@ -144,6 +150,9 @@ func (c *windowsConfiguration) ReadCheckFrequency() (d time.Duration, err error)
 	err = withKey("", func(key registry.Key) error {
 		var r error
 		val, _, r := key.GetIntegerValue("CheckFrequency")
+		if r == registry.ErrNotExist {
+			r = nil
+		}
 		d = time.Duration(int64(val))
 		return r
 	})
@@ -154,6 +163,9 @@ func (c *windowsConfiguration) ReadCleanupFrequency() (d time.Duration, err erro
 	err = withKey("", func(key registry.Key) error {
 		var r error
 		val, _, r := key.GetIntegerValue("CleanupFrequency")
+		if r == registry.ErrNotExist {
+			r = nil
+		}
 		d = time.Duration(int64(val))
 		return r
 	})
@@ -164,6 +176,9 @@ func (c *windowsConfiguration) ReadDateFormat() (f string, err error) {
 	err = withKey("", func(key registry.Key) error {
 		var r error
 		f, _, r = key.GetStringValue("DateFormat")
+		if r == registry.ErrNotExist {
+			r = nil
+		}
 		return r
 	})
 	return
@@ -186,7 +201,7 @@ func appendAndUniq(sl []string, s string) (res []string) {
 func (c *windowsConfiguration) WriteSCPCopier(conf scpCopierConf) error {
 	err := withKey("", func(key registry.Key) error {
 		vals, _, r := key.GetStringsValue("SCPCopiersNames")
-		if r != nil {
+		if r != nil && r != registry.ErrNotExist {
 			return r
 		}
 
@@ -213,7 +228,7 @@ func (c *windowsConfiguration) WriteSCPCopier(conf scpCopierConf) error {
 func (c *windowsConfiguration) WriteDirectory(d directory) error {
 	err := withKey("", func(key registry.Key) error {
 		vals, _, r := key.GetStringsValue("DirectoriesNames")
-		if r != nil {
+		if r != nil && r != registry.ErrNotExist {
 			return r
 		}
 
