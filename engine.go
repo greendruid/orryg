@@ -3,12 +3,15 @@ package main
 import (
 	"fmt"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 type engine struct {
 	conf configuration
 
 	stopCh chan struct{}
+	doneCh chan struct{}
 
 	copiers  map[string]*scpRemoteCopier
 	cleaners map[string]*cleaner
@@ -18,6 +21,7 @@ func newEngine(conf configuration) *engine {
 	return &engine{
 		conf:    conf,
 		stopCh:  make(chan struct{}),
+		doneCh:  make(chan struct{}),
 		copiers: make(map[string]*scpRemoteCopier),
 	}
 }
@@ -113,8 +117,32 @@ func (e *engine) run() {
 	backupOneCh := make(chan directory, 1024)
 	cleanupOneCh := make(chan directory, 1024)
 
+	var ctx context.Context
+	var cancelFunc context.CancelFunc
+
 loop:
 	for {
+		// Process the buffered directories in priority.
+		select {
+		case id := <-backupOneCh:
+			go func() {
+				ctx, cancelFunc = context.WithCancel(context.Background())
+				e.backupOne(ctx, id)
+			}()
+
+		case id := <-cleanupOneCh:
+			go func() {
+				ctx, cancelFunc = context.WithCancel(context.Background())
+				e.expireOne(ctx, id)
+			}()
+
+		case <-e.stopCh:
+			cancelFunc()
+			break loop
+
+		default:
+		}
+
 		select {
 		case <-backupCh:
 			ood, err := e.getOutOfDate()
@@ -127,9 +155,6 @@ loop:
 				backupOneCh <- id
 			}
 
-		case id := <-backupOneCh:
-			e.backupOne(id)
-
 		case <-cleanupCh:
 			directories, err := e.getExpirable()
 			if err != nil {
@@ -141,16 +166,14 @@ loop:
 				cleanupOneCh <- id
 			}
 
-		case id := <-cleanupOneCh:
-			e.expireOne(id)
-
 		case <-e.stopCh:
+			cancelFunc()
 			break loop
 		}
 	}
 }
 
-func (e *engine) backupOne(id directory) {
+func (e *engine) backupOne(ctx context.Context, id directory) {
 	// First init the copiers because the user might have added copiers to the config file.
 	if err := e.init(); err != nil {
 		logger.Printf("unable to init copiers. err=%v", err)
@@ -158,44 +181,74 @@ func (e *engine) backupOne(id directory) {
 	}
 
 	start := time.Now()
-
 	logger.Printf("backing up %s", id.OriginalPath)
 
-	logger.Printf("making tarball of %s", id.OriginalPath)
-	tb := newTarball(id)
-	defer func() {
-		// Cleanup the tarball
-		if err := tb.Close(); err != nil {
-			logger.Printf("unable to close tarball. err=%v", err)
+	ch := make(chan struct{})
+
+	//
+	// First step: making the tarball.
+
+	// NOTE(vincent): no risk of data race because we never read tb before the goroutine is finished.
+	var tb *tarball
+	go func() {
+		logger.Printf("making tarball of %s", id.OriginalPath)
+		tb = newTarball(id)
+		defer func() {
+			// Cleanup the tarball
+			if err := tb.Close(); err != nil {
+				logger.Printf("unable to close tarball. err=%v", err)
+			}
+		}()
+
+		if err := tb.process(); err != nil {
+			logger.Printf("unable to make tarball. err=%v", err)
+			return
 		}
+		logger.Printf("done making tarball of %s", id.OriginalPath)
+
+		ch <- struct{}{}
 	}()
 
-	if err := tb.process(); err != nil {
-		logger.Printf("unable to make tarball. err=%v", err)
+	// Allow cancelling.
+	select {
+	case <-ctx.Done():
+		logger.Printf("cancelling backup of %s", id)
 		return
+	case <-ch:
 	}
-	logger.Printf("done making tarball of %s", id.OriginalPath)
 
 	dateFormat, err := e.conf.ReadDateFormat()
 	if err != nil {
 		logger.Printf("unable to read date format. err=%v", err)
 		return
 	}
-
 	name := fmt.Sprintf("%s_%s.tar.gz", id.ArchiveName, time.Now().UTC().Format(dateFormat))
 
+	// Second step: copy to each copiers
 	for _, copier := range e.copiers {
 		tb.Reset()
 
-		logger.Printf("start copying %s with copier %s", name, copier)
+		go func() {
+			logger.Printf("start copying %s with copier %s", name, copier)
 
-		err := copier.CopyFromReader(tb, tb.fi.Size(), name)
-		if err != nil {
-			logger.Printf("unable to copy the tarball to the remote host. err=%v", err)
-			return // don't continue if even one copier is not working.
+			err := copier.CopyFromReader(tb, tb.fi.Size(), name)
+			if err != nil {
+				logger.Printf("unable to copy the tarball to the remote host. err=%v", err)
+				return // don't continue if even one copier is not working.
+			}
+
+			logger.Printf("done copying %s with copier %s", name, copier)
+
+			ch <- struct{}{}
+		}()
+
+		// Allow cancelling for each copy to a copier
+		select {
+		case <-ctx.Done():
+			logger.Printf("cancelling backup of %s", id)
+			return
+		case <-ch:
 		}
-
-		logger.Printf("done copying %s with copier %s", name, copier)
 	}
 
 	logger.Printf("backed up %s in %s", id.OriginalPath, time.Now().Sub(start))
@@ -208,7 +261,7 @@ func (e *engine) backupOne(id directory) {
 	}
 }
 
-func (e *engine) expireOne(id directory) {
+func (e *engine) expireOne(ctx context.Context, id directory) {
 	if err := e.init(); err != nil {
 		logger.Printf("unable to init copiers. err=%v", err)
 		return
@@ -220,21 +273,35 @@ func (e *engine) expireOne(id directory) {
 		return
 	}
 
+	ch := make(chan struct{})
+
 	for _, cleaner := range e.cleaners {
-		if err := cleaner.cleanAllExpiredBackups(id, dateFormat); err != nil {
-			logger.Printf("unable to clean all expired backups. err=%v", err)
+		go func() {
+			if err := cleaner.cleanAllExpiredBackups(id, dateFormat); err != nil {
+				logger.Printf("unable to clean all expired backups. err=%v", err)
+			}
+
+			ch <- struct{}{}
+		}()
+
+		select {
+		case <-ctx.Done():
+			logger.Printf("cancelling backup of %s", id)
+			return
+		case <-ch:
 		}
 	}
 }
 
 func (e *engine) stop() error {
+	e.stopCh <- struct{}{}
+	<-e.doneCh
+
 	for _, c := range e.copiers {
 		if err := c.Close(); err != nil {
 			return err
 		}
 	}
-
-	e.stopCh <- struct{}{}
 
 	return nil
 }
