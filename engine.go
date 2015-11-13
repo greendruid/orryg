@@ -111,6 +111,10 @@ func (e *engine) run() {
 	backupCh := fanInWithImmediateStart(backupTicker.C)
 	cleanupCh := fanInWithImmediateStart(cleanupTicker.C)
 
+	// keep a big margin just to be safe
+	backupOneCh := make(chan directory, 1024)
+	cleanupOneCh := make(chan directory, 1024)
+
 loop:
 	for {
 		select {
@@ -122,8 +126,11 @@ loop:
 			}
 
 			for _, id := range ood {
-				e.backupOne(id)
+				backupOneCh <- id
 			}
+
+		case id := <-backupOneCh:
+			e.backupOne(id)
 
 		case <-cleanupCh:
 			directories, err := e.getExpirable()
@@ -133,8 +140,11 @@ loop:
 			}
 
 			for _, id := range directories {
-				e.expireOne(id)
+				cleanupOneCh <- id
 			}
+
+		case id := <-cleanupOneCh:
+			e.expireOne(id)
 
 		case <-e.stopCh:
 			break loop
