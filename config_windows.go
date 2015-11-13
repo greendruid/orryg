@@ -117,7 +117,7 @@ func (c *windowsConfiguration) readDirectory(name string) (d directory, err erro
 
 		lastUpdatedTime, r := time.Parse(time.RFC3339, lastUpdated)
 		if r != nil {
-			return r
+			lastUpdatedTime = time.Time{}
 		}
 
 		d = directory{
