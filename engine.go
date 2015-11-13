@@ -15,9 +15,10 @@ type engine struct {
 	cleaners map[string]*cleaner
 }
 
-func newEngine(logger *logger) *engine {
+func newEngine(logger *logger, conf configuration) *engine {
 	return &engine{
 		logger:  logger,
+		conf:    conf,
 		stopCh:  make(chan struct{}),
 		copiers: make(map[string]*scpRemoteCopier),
 	}

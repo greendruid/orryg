@@ -148,7 +148,7 @@ func runService(name string, isDebug bool) {
 		{
 			logger.Infof(1, "starting engine")
 
-			e = newEngine(logger)
+			e = newEngine(logger, newWindowsConfiguration())
 			go e.run()
 
 			logger.Infof(1, "engine started")
