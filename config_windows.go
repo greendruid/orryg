@@ -271,8 +271,8 @@ func (c *windowsConfiguration) WriteDateFormat(s string) error {
 }
 
 func (c *windowsConfiguration) UpdateLastUpdated(d directory) error {
-	return withKey("", func(key registry.Key) error {
-		return key.SetStringValue("LastUpdated", d.LastUpdated.Format(time.RFC3339))
+	return withKey(`\Directories\`+d.ArchiveName, func(key registry.Key) error {
+		return key.SetStringValue("LastUpdated", time.Now().Format(time.RFC3339))
 	})
 }
 
