@@ -12,7 +12,6 @@ import (
 )
 
 type sshClient struct {
-	logger *logger
 	params *sshParameters
 	client *ssh.Client
 }
@@ -21,11 +20,8 @@ func (c sshClient) String() string {
 	return fmt.Sprintf("{host: %s, port: %d, user: %s}", c.params.Host, c.params.Port, c.params.User)
 }
 
-func newSSHClient(logger *logger, params *sshParameters) *sshClient {
-	return &sshClient{
-		logger: logger,
-		params: params,
-	}
+func newSSHClient(params *sshParameters) *sshClient {
+	return &sshClient{params: params}
 }
 
 func (c *sshClient) connect() (err error) {
@@ -97,11 +93,11 @@ func (c *sshClient) getValidSession() (session *ssh.Session) {
 			break
 		}
 
-		c.logger.Errorf(1, "unable to create SSH session. err=%v", err)
-		c.logger.Infof(1, "trying to reconnect SSH client.")
+		logger.Printf("unable to create SSH session. err=%v", err)
+		logger.Printf("trying to reconnect SSH client.")
 
 		if err = c.connect(); err != nil {
-			c.logger.Errorf(1, "unable to reconnect SSH client, retrying later. err=%v", err)
+			logger.Printf("unable to reconnect SSH client, retrying later. err=%v", err)
 			bo.sleep()
 		}
 	}

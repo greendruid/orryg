@@ -6,8 +6,7 @@ import (
 )
 
 type engine struct {
-	logger *logger
-	conf   configuration
+	conf configuration
 
 	stopCh chan struct{}
 
@@ -15,9 +14,8 @@ type engine struct {
 	cleaners map[string]*cleaner
 }
 
-func newEngine(logger *logger, conf configuration) *engine {
+func newEngine(conf configuration) *engine {
 	return &engine{
-		logger:  logger,
 		conf:    conf,
 		stopCh:  make(chan struct{}),
 		copiers: make(map[string]*scpRemoteCopier),
@@ -49,10 +47,10 @@ func (e *engine) init() error {
 		params := c.Params
 
 		{
-			cop := newSCPRemoteCopier(e.logger, c.Name, &params)
+			cop := newSCPRemoteCopier(c.Name, &params)
 
 			if err := cop.client.connect(); err != nil {
-				e.logger.Infof(1, "unable to connect copier %s. err=%v", c, err)
+				logger.Printf("unable to connect copier %s. err=%v", c, err)
 				continue
 			}
 
@@ -60,10 +58,10 @@ func (e *engine) init() error {
 		}
 
 		{
-			cleaner := newCleaner(e.logger, &params)
+			cleaner := newCleaner(&params)
 
 			if err := cleaner.client.connect(); err != nil {
-				e.logger.Infof(1, "unable to connect cleaner %s. err=%v", c, err)
+				logger.Printf("unable to connect cleaner %s. err=%v", c, err)
 				continue
 			}
 
@@ -95,13 +93,13 @@ func fanInWithImmediateStart(in <-chan time.Time) <-chan struct{} {
 func (e *engine) run() {
 	checkFrequency, err := e.conf.ReadCheckFrequency()
 	if err != nil {
-		e.logger.Errorf(1, "unable to read check frequency, using default value of 1 minute. err=%v", err)
+		logger.Printf("unable to read check frequency, using default value of 1 minute. err=%v", err)
 		checkFrequency = time.Minute
 	}
 
 	cleanupFrequency, err := e.conf.ReadCleanupFrequency()
 	if err != nil {
-		e.logger.Errorf(1, "unable to read cleanup frequency, using default value of 1 minute. err=%v", err)
+		logger.Printf("unable to read cleanup frequency, using default value of 1 minute. err=%v", err)
 		cleanupFrequency = time.Minute
 	}
 
@@ -121,7 +119,7 @@ loop:
 		case <-backupCh:
 			ood, err := e.getOutOfDate()
 			if err != nil {
-				e.logger.Errorf(1, "unable to get out of date backups. err=%v", err)
+				logger.Printf("unable to get out of date backups. err=%v", err)
 				continue loop
 			}
 
@@ -135,7 +133,7 @@ loop:
 		case <-cleanupCh:
 			directories, err := e.getExpirable()
 			if err != nil {
-				e.logger.Errorf(1, "unable to get expirable backups. err=%v", err)
+				logger.Printf("unable to get expirable backups. err=%v", err)
 				continue loop
 			}
 
@@ -155,32 +153,32 @@ loop:
 func (e *engine) backupOne(id directory) {
 	// First init the copiers because the user might have added copiers to the config file.
 	if err := e.init(); err != nil {
-		e.logger.Errorf(1, "unable to init copiers. err=%v", err)
+		logger.Printf("unable to init copiers. err=%v", err)
 		return
 	}
 
 	start := time.Now()
 
-	e.logger.Infof(1, "backing up %s", id.OriginalPath)
+	logger.Printf("backing up %s", id.OriginalPath)
 
-	e.logger.Infof(1, "making tarball of %s", id.OriginalPath)
+	logger.Printf("making tarball of %s", id.OriginalPath)
 	tb := newTarball(id)
 	defer func() {
 		// Cleanup the tarball
 		if err := tb.Close(); err != nil {
-			e.logger.Errorf(1, "unable to close tarball. err=%v", err)
+			logger.Printf("unable to close tarball. err=%v", err)
 		}
 	}()
 
 	if err := tb.process(); err != nil {
-		e.logger.Errorf(1, "unable to make tarball. err=%v", err)
+		logger.Printf("unable to make tarball. err=%v", err)
 		return
 	}
-	e.logger.Infof(1, "done making tarball of %s", id.OriginalPath)
+	logger.Printf("done making tarball of %s", id.OriginalPath)
 
 	dateFormat, err := e.conf.ReadDateFormat()
 	if err != nil {
-		e.logger.Errorf(1, "unable to read date format. err=%v", err)
+		logger.Printf("unable to read date format. err=%v", err)
 		return
 	}
 
@@ -189,42 +187,42 @@ func (e *engine) backupOne(id directory) {
 	for _, copier := range e.copiers {
 		tb.Reset()
 
-		e.logger.Infof(1, "start copying %s with copier %s", name, copier)
+		logger.Printf("start copying %s with copier %s", name, copier)
 
 		err := copier.CopyFromReader(tb, tb.fi.Size(), name)
 		if err != nil {
-			e.logger.Errorf(1, "unable to copy the tarball to the remote host. err=%v", err)
+			logger.Printf("unable to copy the tarball to the remote host. err=%v", err)
 			return // don't continue if even one copier is not working.
 		}
 
-		e.logger.Infof(1, "done copying %s with copier %s", name, copier)
+		logger.Printf("done copying %s with copier %s", name, copier)
 	}
 
-	e.logger.Infof(1, "backed up %s in %s", id.OriginalPath, time.Now().Sub(start))
+	logger.Printf("backed up %s in %s", id.OriginalPath, time.Now().Sub(start))
 
 	// Persist the new config
 	{
 		if err := e.conf.UpdateLastUpdated(id); err != nil {
-			e.logger.Errorf(1, "unable to update the last updated field of %v. err=%v", id, err)
+			logger.Printf("unable to update the last updated field of %v. err=%v", id, err)
 		}
 	}
 }
 
 func (e *engine) expireOne(id directory) {
 	if err := e.init(); err != nil {
-		e.logger.Errorf(1, "unable to init copiers. err=%v", err)
+		logger.Printf("unable to init copiers. err=%v", err)
 		return
 	}
 
 	dateFormat, err := e.conf.ReadDateFormat()
 	if err != nil {
-		e.logger.Errorf(1, "unable to read date format. err=%v", err)
+		logger.Printf("unable to read date format. err=%v", err)
 		return
 	}
 
 	for _, cleaner := range e.cleaners {
 		if err := cleaner.cleanAllExpiredBackups(id, dateFormat); err != nil {
-			e.logger.Errorf(1, "unable to clean all expired backups. err=%v", err)
+			logger.Printf("unable to clean all expired backups. err=%v", err)
 		}
 	}
 }

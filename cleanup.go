@@ -10,17 +10,14 @@ import (
 )
 
 type cleaner struct {
-	logger *logger
-
 	backupsDir string
 	client     *sshClient
 }
 
-func newCleaner(logger *logger, params *sshParameters) *cleaner {
+func newCleaner(params *sshParameters) *cleaner {
 	return &cleaner{
-		logger:     logger,
 		backupsDir: params.BackupsDir,
-		client:     newSSHClient(logger, params),
+		client:     newSSHClient(params),
 	}
 }
 
@@ -31,10 +28,10 @@ func (c *cleaner) cleanAllExpiredBackups(id directory, dateFormat string) error 
 	}
 
 	for _, filename := range filenames {
-		c.logger.Infof(1, "cleaning %s", filename)
+		logger.Printf("cleaning %s", filename)
 
 		if err := c.clean(filename); err != nil {
-			c.logger.Errorf(1, "unable to clean %s. err=%v", filename, err)
+			logger.Printf("unable to clean %s. err=%v", filename, err)
 		}
 	}
 
@@ -92,7 +89,7 @@ func (c *cleaner) getExpiredBackups(d directory, dateFormat string) (res []strin
 
 		t, err := time.Parse(dateFormat, tstr)
 		if err != nil {
-			c.logger.Warnf(1, "unable to parse date '%s'. err=%v", tstr, err)
+			logger.Printf("unable to parse date '%s'. err=%v", tstr, err)
 			continue
 		}
 

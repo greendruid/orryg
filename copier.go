@@ -9,7 +9,6 @@ import (
 )
 
 type scpRemoteCopier struct {
-	logger  *logger
 	scratch [0xFF]byte
 
 	name       string
@@ -21,12 +20,11 @@ func (c *scpRemoteCopier) String() string {
 	return fmt.Sprintf("{name: %s, client: %s}", c.name, c.client)
 }
 
-func newSCPRemoteCopier(logger *logger, name string, params *sshParameters) *scpRemoteCopier {
+func newSCPRemoteCopier(name string, params *sshParameters) *scpRemoteCopier {
 	return &scpRemoteCopier{
-		logger:     logger,
 		name:       name,
 		backupsDir: params.BackupsDir,
-		client:     newSSHClient(logger, params),
+		client:     newSSHClient(params),
 	}
 }
 
@@ -68,13 +66,13 @@ func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 	go func() {
 		w, err := session.StdinPipe()
 		if err != nil {
-			c.logger.Errorf(1, "unable to get stdin pipe. err=%v", err)
+			logger.Printf("unable to get stdin pipe. err=%v", err)
 			return
 		}
 
 		r, err := session.StdoutPipe()
 		if err != nil {
-			c.logger.Errorf(1, "unable to get stdout pipe. err=%v", err)
+			logger.Printf("unable to get stdout pipe. err=%v", err)
 			return
 		}
 
@@ -82,7 +80,7 @@ func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 		if dir != "." {
 			for _, d := range strings.Split(dir, string(os.PathSeparator)) {
 				if err := c.addDirectory(w, r, d); err != nil {
-					c.logger.Errorf(1, "unable to add directory. err=%v", err)
+					logger.Printf("unable to add directory. err=%v", err)
 					return
 				}
 			}
@@ -91,50 +89,50 @@ func (c *scpRemoteCopier) CopyFromReader(src io.Reader, size int64, path string)
 		fname := filepath.Base(path)
 		_, err = fmt.Fprintf(w, "C0600 %d %s\n", size, fname)
 		if err != nil {
-			c.logger.Errorf(1, "unable to add file %s. err=%v", fname, err)
+			logger.Printf("unable to add file %s. err=%v", fname, err)
 			return
 		}
 
 		{
 			_, err = r.Read(c.scratch[0:0])
 			if err != nil {
-				c.logger.Errorf(1, "unable to read response byte. err=%v", err)
+				logger.Printf("unable to read response byte. err=%v", err)
 				return
 			}
 			if c.scratch[0] != 0 {
 				err := c.readError(r, c.scratch[0])
-				c.logger.Errorf(1, "response was %d. err=%v", c.scratch[0], err)
+				logger.Printf("response was %d. err=%v", c.scratch[0], err)
 				return
 			}
 		}
 
 		_, err = io.Copy(w, src)
 		if err != nil {
-			c.logger.Errorf(1, "unable to copy file data. err=%v", err)
+			logger.Printf("unable to copy file data. err=%v", err)
 			return
 		}
 
 		_, err = w.Write([]byte{0})
 		if err != nil {
-			c.logger.Errorf(1, "unable to write start data transfer byte. err=%v", err)
+			logger.Printf("unable to write start data transfer byte. err=%v", err)
 			return
 		}
 
 		{
 			_, err = r.Read(c.scratch[0:0])
 			if err != nil {
-				c.logger.Errorf(1, "unable to read response byte. err=%v", err)
+				logger.Printf("unable to read response byte. err=%v", err)
 				return
 			}
 			if c.scratch[0] != 0 {
 				err := c.readError(r, c.scratch[0])
-				c.logger.Errorf(1, "response was %d. err=%v", c.scratch[0], err)
+				logger.Printf("response was %d. err=%v", c.scratch[0], err)
 				return
 			}
 		}
 
 		if err = w.Close(); err != nil {
-			c.logger.Errorf(1, "unable to close stdin pipe. err=%v", err)
+			logger.Printf("unable to close stdin pipe. err=%v", err)
 			return
 		}
 	}()

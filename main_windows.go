@@ -2,72 +2,22 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"strings"
-	"time"
+	"syscall"
 
 	"net/http"
 	_ "net/http/pprof"
 
 	"github.com/vrischmann/userdir"
-
-	"golang.org/x/sys/windows/svc"
-	"golang.org/x/sys/windows/svc/debug"
-	"golang.org/x/sys/windows/svc/eventlog"
-	"golang.org/x/sys/windows/svc/mgr"
 )
 
-type service struct {
-	logger *logger
-	e      *engine
-}
-
-func (s *service) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (ssec bool, errno uint32) {
-	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
-
-	changes <- svc.Status{State: svc.StartPending}
-
-	changes <- svc.Status{
-		State:   svc.Running,
-		Accepts: cmdsAccepted,
-	}
-
-loop:
-	for {
-		select {
-		case c := <-r:
-			switch c.Cmd {
-			case svc.Interrogate:
-				changes <- c.CurrentStatus
-				time.Sleep(100 * time.Millisecond)
-				changes <- c.CurrentStatus
-
-			case svc.Stop, svc.Shutdown:
-				s.logger.Infof(1, "stopping")
-
-				if err := s.e.stop(); err != nil {
-					s.logger.Errorf(1, err.Error())
-				}
-
-				break loop
-
-			default:
-				s.logger.Errorf(1, "unexpected control request #%d", c)
-			}
-		}
-	}
-
-	changes <- svc.Status{State: svc.StopPending}
-
-	return
-}
-
-func getLogFile(elog debug.Log) io.Writer {
+func getLogFile() io.Writer {
 	dir := filepath.Join(userdir.GetDataHome(), "orryg")
 
 	{
@@ -75,11 +25,11 @@ func getLogFile(elog debug.Log) io.Writer {
 		if err != nil && os.IsNotExist(err) {
 			os.MkdirAll(dir, 0700)
 		} else if err != nil && !os.IsNotExist(err) {
-			elog.Warning(1, fmt.Sprintf("unable to create log directory %s. err=%v", dir, err))
+			log.Printf("unable to create log directory %s. err=%v", dir, err)
 			return ioutil.Discard
 		} else {
 			if !fi.IsDir() {
-				elog.Warning(1, fmt.Sprintf("unable to create log directory %s because it's already a file", dir))
+				log.Printf("unable to create log directory %s because it's already a file", dir)
 				return ioutil.Discard
 			}
 		}
@@ -88,286 +38,77 @@ func getLogFile(elog debug.Log) io.Writer {
 	file := filepath.Join(dir, "main.log")
 	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		elog.Warning(1, fmt.Sprintf("unable to create log file %s. err=%v", file, err))
+		log.Printf("unable to create log file %s. err=%v", file, err)
 		return ioutil.Discard
 	}
 
 	return f
 }
 
-func runService(name string, isDebug bool) {
+var (
+	flConfigure bool
+	flVerbose   bool
+
+	e *engine
+
+	signalCh  = make(chan os.Signal, 1)
+	allDoneCh = make(chan error)
+)
+
+func handleSignals() {
+	<-signalCh
+
+	allDoneCh <- e.stop()
+}
+
+func init() {
+	flag.BoolVar(&flConfigure, "c", false, "Run the configuration prompt")
+	flag.BoolVar(&flConfigure, "configure", false, "Run the configuration prompt")
+	flag.BoolVar(&flVerbose, "v", false, "Be verbose (print to stdout too)")
+}
+
+func main() {
+	flag.Parse()
+
 	go http.ListenAndServe(":6060", nil)
 
-	var elog debug.Log
-	var err error
-	{
-		if isDebug {
-			elog = debug.New(name)
-		} else {
-			elog, err = eventlog.Open(name)
-			if err != nil {
-				return
-			}
-		}
-		defer elog.Close()
+	if flConfigure {
+		cp := configurePrompt{conf: newWindowsConfiguration()}
+		cp.run()
+		return
 	}
 
-	logger := &logger{
-		elog:   elog,
-		stdLog: log.New(getLogFile(elog), "orryg: ", log.LstdFlags),
+	if flVerbose {
+		logger = log.New(io.MultiWriter(getLogFile(), os.Stdout), "orryg: ", log.LstdFlags)
+	} else {
+		logger = log.New(getLogFile(), "orryg: ", log.LstdFlags)
 	}
 
-	// TODO(vincent): configuration validation at start up ?
 	{
 		conf := newWindowsConfiguration()
 		s, err := conf.DumpConfig()
 		if err != nil {
-			logger.Errorf(1, "there was a problem while dumping the configuration. err=%v", err)
+			logger.Printf("there was a problem while dumping the configuration. err=%v", err)
 			return
 		}
 
-		logger.Infof(1, "configuration dump")
+		logger.Printf("configuration dump")
 		for _, line := range s {
-			logger.Infof(1, "%s", line)
+			logger.Printf("%s", line)
 		}
 	}
 
-	var run func(string, svc.Handler) error
-	{
-		run = svc.Run
-		if isDebug {
-			run = debug.Run
-		}
-	}
+	// Listen for os signals
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM)
+	go handleSignals()
 
-	logger.Infof(1, "starting %s service", name)
+	go func() {
+		e = newEngine(newWindowsConfiguration())
+		e.run()
+	}()
 
-	var sv *service
-	{
-		var e *engine
-		{
-			logger.Infof(1, "starting engine")
-
-			e = newEngine(logger, newWindowsConfiguration())
-			go e.run()
-
-			logger.Infof(1, "engine started")
-		}
-
-		sv = &service{
-			e:      e,
-			logger: logger,
-		}
-	}
-
-	err = run(name, sv)
+	err := <-allDoneCh
 	if err != nil {
-		logger.Errorf(1, "%s service failed: %v", name, err)
-		return
-	}
-
-	logger.Infof(1, "%s service stopped", name)
-}
-
-func startService(name string) error {
-	m, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer m.Disconnect()
-
-	s, err := m.OpenService(name)
-	if err != nil {
-		return fmt.Errorf("could not access service: %v", err)
-	}
-	defer s.Close()
-
-	err = s.Start("is", "manual-started")
-	if err != nil {
-		return fmt.Errorf("could not start service: %v", err)
-	}
-
-	return nil
-}
-
-func controlService(name string, c svc.Cmd, to svc.State) error {
-	m, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer m.Disconnect()
-
-	s, err := m.OpenService(name)
-	if err != nil {
-		return fmt.Errorf("could not access service: %v", err)
-	}
-	defer s.Close()
-
-	status, err := s.Control(c)
-	if err != nil {
-		return fmt.Errorf("could not send control=%d: %v", c, err)
-	}
-
-	timeout := time.Now().Add(10 * time.Second)
-
-	for status.State != to {
-		if timeout.Before(time.Now()) {
-			return fmt.Errorf("timeout waiting for service to go to state=%d", to)
-		}
-
-		time.Sleep(300 * time.Millisecond)
-
-		status, err = s.Query()
-		if err != nil {
-			return fmt.Errorf("could not retrieve service status: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func exePath() (string, error) {
-	prog := os.Args[0]
-	p, err := filepath.Abs(prog)
-	if err != nil {
-		return "", err
-	}
-
-	fi, err := os.Stat(p)
-	if err == nil {
-		if !fi.Mode().IsDir() {
-			return p, nil
-		}
-		err = fmt.Errorf("%s is directory", p)
-	}
-
-	if filepath.Ext(p) == "" {
-		p += ".exe"
-		fi, err := os.Stat(p)
-		if err == nil {
-			if !fi.Mode().IsDir() {
-				return p, nil
-			}
-			err = fmt.Errorf("%s is directory", p)
-		}
-	}
-
-	return "", err
-}
-
-func installService(name, desc string) error {
-	exepath, err := exePath()
-	if err != nil {
-		return err
-	}
-
-	m, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer m.Disconnect()
-
-	s, err := m.OpenService(name)
-	if err == nil {
-		s.Close()
-		return fmt.Errorf("service %s already exists", name)
-	}
-
-	serviceConfig := mgr.Config{
-		DisplayName: desc,
-		StartType:   mgr.StartAutomatic,
-	}
-
-	s, err = m.CreateService(name, exepath, serviceConfig, "is", "auto-started")
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	err = eventlog.InstallAsEventCreate(name, eventlog.Error|eventlog.Warning|eventlog.Info)
-	if err != nil {
-		s.Delete()
-		return fmt.Errorf("SetupEventLogSource() failed: %s", err)
-	}
-
-	return nil
-}
-
-func removeService(name string) error {
-	m, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer m.Disconnect()
-
-	s, err := m.OpenService(name)
-	if err != nil {
-		return fmt.Errorf("service %s is not installed", name)
-	}
-	defer s.Close()
-
-	err = s.Delete()
-	if err != nil {
-		return err
-	}
-
-	err = eventlog.Remove(name)
-	if err != nil {
-		return fmt.Errorf("RemoveEventLogSource() failed: %s", err)
-	}
-
-	return nil
-}
-
-func usage(errmsg string) {
-	fmt.Fprintf(os.Stderr,
-		"%s\n\n"+
-			"usage: %s <command>\n"+
-			"       where <command> is one of\n"+
-			"       install, remove, debug, start, stop.\n",
-		errmsg, os.Args[0])
-	os.Exit(2)
-}
-
-func main() {
-	const svcName = "Orryg"
-
-	isIntSess, err := svc.IsAnInteractiveSession()
-	if err != nil {
-		log.Fatalf("failed to determine if we are running in an interactive session: %v", err)
-	}
-
-	if !isIntSess {
-		runService(svcName, false)
-		return
-	}
-
-	if len(os.Args) < 2 {
-		usage("no command specified")
-	}
-
-	cmd := strings.ToLower(os.Args[1])
-	switch cmd {
-	case "configure":
-		cp := configurePrompt{conf: newWindowsConfiguration()}
-		cp.run()
-		return
-	case "debug":
-		runService(svcName, true)
-		return
-	case "install":
-		err = installService(svcName, "Backup service")
-	case "remove":
-		err = removeService(svcName)
-	case "start":
-		err = startService(svcName)
-	case "stop":
-		err = controlService(svcName, svc.Stop, svc.Stopped)
-	default:
-		usage(fmt.Sprintf("invalid command %s", cmd))
-	}
-
-	if err != nil {
-		log.Fatalf("failed to %s %s: %v", cmd, svcName, err)
+		log.Fatalln(err)
 	}
 }
