@@ -77,8 +77,7 @@ func main() {
 	// NOTE(vincent): this is blocking
 	mw.Run()
 
-	// err := e.stop()
-	// if err != nil {
-	// 	logger.Printf("unable to stop engine correctly. err=%v", err)
-	// }
+	if err = e.stop(); err != nil {
+		logger.Printf("unable to stop engine correctly. err=%v", err)
+	}
 }

@@ -107,58 +107,58 @@ func fanInWithImmediateStart(in <-chan time.Time) <-chan struct{} {
 }
 
 func (e *engine) run() {
-	// checkFrequency, err := e.conf.ReadCheckFrequency()
-	// if err != nil {
-	// 	logger.Printf("unable to read check frequency, using default value of 1 minute. err=%v", err)
-	// 	checkFrequency = time.Minute
-	// }
-	//
-	// cleanupFrequency, err := e.conf.ReadCleanupFrequency()
-	// if err != nil {
-	// 	logger.Printf("unable to read cleanup frequency, using default value of 1 minute. err=%v", err)
-	// 	cleanupFrequency = time.Minute
-	// }
+	checkFrequency, err := e.conf.ReadCheckFrequency()
+	if err != nil {
+		logger.Printf("unable to read check frequency, using default value of 1 minute. err=%v", err)
+		checkFrequency = time.Minute
+	}
 
-	// backupTicker := time.NewTicker(checkFrequency)
-	// cleanupTicker := time.NewTicker(cleanupFrequency)
+	cleanupFrequency, err := e.conf.ReadCleanupFrequency()
+	if err != nil {
+		logger.Printf("unable to read cleanup frequency, using default value of 1 minute. err=%v", err)
+		cleanupFrequency = time.Minute
+	}
 
-	// backupCh := fanInWithImmediateStart(backupTicker.C)
-	// cleanupCh := fanInWithImmediateStart(cleanupTicker.C)
+	backupTicker := time.NewTicker(checkFrequency)
+	cleanupTicker := time.NewTicker(cleanupFrequency)
+
+	backupCh := fanInWithImmediateStart(backupTicker.C)
+	cleanupCh := fanInWithImmediateStart(cleanupTicker.C)
 
 	// keep a big margin just to be safe
-	// backupOneCh := make(chan directory, 1024)
-	// cleanupOneCh := make(chan directory, 1024)
+	backupOneCh := make(chan directory, 1024)
+	cleanupOneCh := make(chan directory, 1024)
 
 loop:
 	for {
 		select {
-		// case <-backupCh:
-		// 	ood, err := e.getOutOfDate()
-		// 	if err != nil {
-		// 		logger.Printf("unable to get out of date backups. err=%v", err)
-		// 		continue loop
-		// 	}
-		//
-		// 	for _, id := range ood {
-		// 		backupOneCh <- id
-		// 	}
-		//
-		// case id := <-backupOneCh:
-		// 	e.backupOne(id)
-		//
-		// case <-cleanupCh:
-		// 	directories, err := e.getExpirable()
-		// 	if err != nil {
-		// 		logger.Printf("unable to get expirable backups. err=%v", err)
-		// 		continue loop
-		// 	}
-		//
-		// 	for _, id := range directories {
-		// 		cleanupOneCh <- id
-		// 	}
-		//
-		// case id := <-cleanupOneCh:
-		// 	e.expireOne(id)
+		case <-backupCh:
+			ood, err := e.getOutOfDate()
+			if err != nil {
+				logger.Printf("unable to get out of date backups. err=%v", err)
+				continue loop
+			}
+
+			for _, id := range ood {
+				backupOneCh <- id
+			}
+
+		case id := <-backupOneCh:
+			e.backupOne(id)
+
+		case <-cleanupCh:
+			directories, err := e.getExpirable()
+			if err != nil {
+				logger.Printf("unable to get expirable backups. err=%v", err)
+				continue loop
+			}
+
+			for _, id := range directories {
+				cleanupOneCh <- id
+			}
+
+		case id := <-cleanupOneCh:
+			e.expireOne(id)
 
 		case <-e.stopCh:
 			break loop
