@@ -329,12 +329,5 @@ func buildUI() (err error) {
 		})
 	}
 
-	if err = tray.init(); err != nil {
-		logger.Printf("unable to initialize tray icon. err=%v", err)
-		return
-	}
-
-	mw.SetVisible(true)
-
-	return
+	return tray.init()
 }
