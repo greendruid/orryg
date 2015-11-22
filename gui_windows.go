@@ -45,10 +45,27 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 	}
 }
 
-type mouseDownEvent struct {
-	x      int
-	y      int
-	button walk.MouseButton
+type tabWidget struct {
+	*walk.TabWidget
+}
+
+func newTabWidget(mw *mainWindow) (*tabWidget, error) {
+	tw, err := walk.NewTabWidget(mw)
+	if err != nil {
+		return nil, err
+	}
+
+	w := &tabWidget{
+		TabWidget: tw,
+	}
+	err = walk.InitWrapperWindow(w)
+
+	return w, err
+}
+
+func (w *tabWidget) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) uintptr {
+	// logger.Printf("tab widget wnd proc: %v %v %v %v", hwnd, msg, wParam, lParam)
+	return w.TabWidget.WndProc(hwnd, msg, wParam, lParam)
 }
 
 type trayIcon struct {
@@ -115,6 +132,7 @@ func (i *trayIcon) setMenu() {
 			return
 		}
 		i.stopActionTriggeredHandler = i.stopAction.Triggered().Attach(func() {
+			i.notifyIcon.Dispose()
 			win.PostMessage(i.mwHwnd, win.WM_CLOSE, 0, 0)
 		})
 		i.err = menu.Actions().Add(i.stopAction)

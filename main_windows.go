@@ -46,8 +46,6 @@ func getLogFile() io.Writer {
 var (
 	flConfigure bool
 	flVerbose   bool
-
-	e *engine
 )
 
 func init() {
@@ -87,17 +85,83 @@ func main() {
 		}
 	}
 
-	e = newEngine(newWindowsConfiguration())
+	e := newEngine(newWindowsConfiguration())
 	go e.run()
 
-	mw, err := newMainWindow()
-	if err != nil {
-		logger.Printf("unable to create new main window. err=%v", err)
-		return
+	var (
+		mw                 *mainWindow
+		tw                 *tabWidget
+		directoriesTabPage *walk.TabPage
+		directoriesListBox *walk.ListBox
+		copiersTabPage     *walk.TabPage
+		copiersListBox     *walk.ListBox
+
+		err error
+	)
+
+	{
+		mw, err = newMainWindow()
+		if err != nil {
+			logger.Printf("unable to create new main window. err=%v", err)
+			return
+		}
+		mw.SetSize(walk.Size{Width: 640, Height: 480})
+		mw.SetLayout(walk.NewHBoxLayout())
 	}
 
-	mw.SetSize(walk.Size{Width: 640, Height: 480})
-	mw.SetVisible(false)
+	{
+		tw, err = newTabWidget(mw)
+		if err != nil {
+			logger.Printf("unable to create new tab widget. err=%v", err)
+			return
+		}
+		tw.SetVisible(true)
+
+		pages := tw.Pages()
+
+		{
+			directoriesTabPage, err = walk.NewTabPage()
+			if err != nil {
+				logger.Printf("unable to create directories tab page. err=%v", err)
+				return
+			}
+			directoriesTabPage.SetTitle("Directories")
+			directoriesTabPage.SetLayout(walk.NewHBoxLayout())
+			pages.Add(directoriesTabPage)
+		}
+
+		{
+			directoriesListBox, err = walk.NewListBox(directoriesTabPage)
+			if err != nil {
+				logger.Printf("unable to create directories list box. err=%v", err)
+			}
+			directoriesListBox.SetModel([]string{"foo", "bar"})
+		}
+
+		{
+			copiersTabPage, err = walk.NewTabPage()
+			if err != nil {
+				logger.Printf("unable to create copiers tab page. err=%v", err)
+				return
+			}
+			copiersTabPage.SetTitle("Copiers")
+			copiersTabPage.SetLayout(walk.NewHBoxLayout())
+			pages.Add(copiersTabPage)
+		}
+
+		{
+			copiersListBox, err = walk.NewListBox(copiersTabPage)
+			if err != nil {
+				logger.Printf("unable to create copiers list box. err=%v", err)
+			}
+			copiersListBox.SetModel([]string{"foo copier", "bar copier"})
+		}
+
+		tw.SetCurrentIndex(0)
+		tw.CurrentIndexChanged().Attach(func() {
+			logger.Printf("current index: %v", tw.CurrentIndex())
+		})
+	}
 
 	{
 		tray := trayIcon{
@@ -110,6 +174,7 @@ func main() {
 		}
 	}
 
+	mw.SetVisible(true)
 	mw.Run()
 
 	// 	msg := new(win.MSG)
