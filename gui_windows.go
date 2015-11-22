@@ -6,7 +6,16 @@ import (
 	"os"
 
 	"github.com/lxn/walk"
+	"github.com/lxn/win"
 )
+
+const (
+	wmShowUI = win.WM_USER + 1
+)
+
+type mainWindow struct {
+	mw *walk.MainWindow
+}
 
 type mouseDownEvent struct {
 	x      int
@@ -19,16 +28,11 @@ type trayIcon struct {
 	icon       *walk.Icon
 	notifyIcon *walk.NotifyIcon
 
-	mouseDownHandler int
-	mouseDownCh      chan mouseDownEvent
+	stopAction                 *walk.Action
+	stopActionTriggeredHandler int
+	mouseDownHandler           int
 
 	err error
-}
-
-func newTrayIcon() *trayIcon {
-	return &trayIcon{
-		mouseDownCh: make(chan mouseDownEvent),
-	}
 }
 
 func (i *trayIcon) loadImage() {
@@ -70,6 +74,24 @@ func (i *trayIcon) setIcon() {
 	i.err = i.notifyIcon.SetIcon(i.icon)
 }
 
+func (i *trayIcon) setMenu() {
+	if i.err != nil {
+		return
+	}
+	menu := i.notifyIcon.ContextMenu()
+
+	{
+		i.stopAction = walk.NewAction()
+		if i.err = i.stopAction.SetText("Quit"); i.err != nil {
+			return
+		}
+		i.stopActionTriggeredHandler = i.stopAction.Triggered().Attach(func() {
+			win.PostMessage(win.HWND(0), win.WM_CLOSE, 0, 0)
+		})
+		i.err = menu.Actions().Add(i.stopAction)
+	}
+}
+
 func (i *trayIcon) setVisible(v bool) {
 	if i.err != nil {
 		return
@@ -82,7 +104,9 @@ func (i *trayIcon) attachMouseDownHandler() {
 		return
 	}
 	i.mouseDownHandler = i.notifyIcon.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
-		i.mouseDownCh <- mouseDownEvent{x, y, button}
+		if button == walk.LeftButton {
+			win.PostMessage(win.HWND(0), wmShowUI, 0, 0)
+		}
 	})
 }
 
@@ -92,6 +116,7 @@ func (i *trayIcon) init() error {
 	i.attachMouseDownHandler()
 	i.makeIcon()
 	i.setIcon()
+	i.setMenu()
 	i.setVisible(true)
 
 	return i.err

@@ -48,16 +48,7 @@ var (
 	flVerbose   bool
 
 	e *engine
-
-	signalCh  = make(chan os.Signal, 1)
-	allDoneCh = make(chan error)
 )
-
-func handleSignals() {
-	<-signalCh
-
-	allDoneCh <- e.stop()
-}
 
 func init() {
 	flag.BoolVar(&flConfigure, "c", false, "Run the configuration prompt")
@@ -96,17 +87,10 @@ func main() {
 		}
 	}
 
-	// go func() {
-	// 	e = newEngine(newWindowsConfiguration())
-	// 	e.run()
-	// }()
+	e = newEngine(newWindowsConfiguration())
+	go e.run()
 
-	trayIcon := newTrayIcon()
-	go func() {
-		for ev := range trayIcon.mouseDownCh {
-			logger.Printf("ev: %#v", ev)
-		}
-	}()
+	var trayIcon trayIcon
 
 	if err := trayIcon.init(); err != nil {
 		logger.Printf("unable to initialize tray icon. err=%v", err)
@@ -114,15 +98,25 @@ func main() {
 	}
 
 	msg := new(win.MSG)
-	for win.GetMessage(msg, 0, 0, 0) > 0 {
-		win.TranslateMessage(msg)
-		win.DispatchMessage(msg)
+loop:
+	for {
+		if n := win.GetMessage(msg, 0, 0, 0); n == 0 || n == -1 {
+			break
+		}
+
+		switch msg.Message {
+		case wmShowUI:
+
+		case win.WM_CLOSE:
+			break loop
+		default:
+			win.TranslateMessage(msg)
+			win.DispatchMessage(msg)
+		}
 	}
 
-	logger.Println("lalala")
-
-	err := <-allDoneCh
+	err := e.stop()
 	if err != nil {
-		log.Fatalln(err)
+		logger.Printf("unable to stop engine correctly. err=%v", err)
 	}
 }
