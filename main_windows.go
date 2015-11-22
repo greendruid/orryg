@@ -11,7 +11,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/AllenDang/w32"
+	"github.com/lxn/win"
 	"github.com/vrischmann/userdir"
 )
 
@@ -103,10 +103,10 @@ func main() {
 
 	trayIconInit()
 
-	msg := new(w32.MSG)
-	for w32.GetMessage(msg, 0, 0, 0) > 0 {
-		w32.TranslateMessage(msg)
-		w32.DispatchMessage(msg)
+	msg := new(win.MSG)
+	for win.GetMessage(msg, 0, 0, 0) > 0 {
+		win.TranslateMessage(msg)
+		win.DispatchMessage(msg)
 	}
 
 	logger.Println("lalala")
