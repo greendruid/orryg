@@ -38,6 +38,7 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 		m.SetVisible(!m.Visible())
 		return 0
 	case win.WM_CLOSE:
+		tray.notifyIcon.Dispose()
 		// TODO(vincent): do we want to do something here ?
 		fallthrough
 	default:
@@ -45,6 +46,7 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 	}
 }
 
+// TODO(vincent): maybe we don't need this
 type tabWidget struct {
 	*walk.TabWidget
 }
@@ -64,12 +66,10 @@ func newTabWidget(mw *mainWindow) (*tabWidget, error) {
 }
 
 func (w *tabWidget) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) uintptr {
-	// logger.Printf("tab widget wnd proc: %v %v %v %v", hwnd, msg, wParam, lParam)
 	return w.TabWidget.WndProc(hwnd, msg, wParam, lParam)
 }
 
 type trayIcon struct {
-	mwHwnd     win.HWND
 	im         image.Image
 	icon       *walk.Icon
 	notifyIcon *walk.NotifyIcon
@@ -133,7 +133,7 @@ func (i *trayIcon) setMenu() {
 		}
 		i.stopActionTriggeredHandler = i.stopAction.Triggered().Attach(func() {
 			i.notifyIcon.Dispose()
-			win.PostMessage(i.mwHwnd, win.WM_CLOSE, 0, 0)
+			win.PostMessage(mw.Handle(), win.WM_CLOSE, 0, 0)
 		})
 		i.err = menu.Actions().Add(i.stopAction)
 	}
@@ -152,7 +152,7 @@ func (i *trayIcon) attachMouseDownHandler() {
 	}
 	i.mouseDownHandler = i.notifyIcon.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button == walk.LeftButton {
-			win.PostMessage(i.mwHwnd, wmShowUI, 0, 0)
+			win.PostMessage(mw.Handle(), wmShowUI, 0, 0)
 		}
 	})
 }

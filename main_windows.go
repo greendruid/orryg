@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"io"
 	"io/ioutil"
 	"log"
@@ -44,35 +43,26 @@ func getLogFile() io.Writer {
 }
 
 var (
-	flConfigure bool
-	flVerbose   bool
+	conf configuration
+
+	mw             *mainWindow
+	tw             *tabWidget
+	dirTabPage     *walk.TabPage
+	dirListBox     *walk.ListBox
+	dirModel       *directoriesModel
+	copiersTabPage *walk.TabPage
+	copiersListBox *walk.ListBox
+	tray           trayIcon
 )
 
-func init() {
-	flag.BoolVar(&flConfigure, "c", false, "Run the configuration prompt")
-	flag.BoolVar(&flConfigure, "configure", false, "Run the configuration prompt")
-	flag.BoolVar(&flVerbose, "v", false, "Be verbose (print to stdout too)")
-}
-
 func main() {
-	flag.Parse()
-
 	go http.ListenAndServe(":6060", nil)
 
-	// if flConfigure {
-	// 	cp := configurePrompt{conf: newWindowsConfiguration()}
-	// 	cp.run()
-	// 	return
-	// }
-
-	if flVerbose {
-		logger = log.New(io.MultiWriter(getLogFile(), os.Stdout), "orryg: ", log.LstdFlags)
-	} else {
-		logger = log.New(getLogFile(), "orryg: ", log.LstdFlags)
-	}
+	logger = log.New(io.MultiWriter(getLogFile(), os.Stdout), "orryg: ", log.LstdFlags)
 
 	{
-		conf := newWindowsConfiguration()
+		conf = newWindowsConfiguration()
+
 		s, err := conf.DumpConfig()
 		if err != nil {
 			logger.Printf("there was a problem while dumping the configuration. err=%v", err)
@@ -85,19 +75,13 @@ func main() {
 		}
 	}
 
-	e := newEngine(newWindowsConfiguration())
+	e := newEngine(conf)
 	go e.run()
 
-	var (
-		mw                 *mainWindow
-		tw                 *tabWidget
-		directoriesTabPage *walk.TabPage
-		directoriesListBox *walk.ListBox
-		copiersTabPage     *walk.TabPage
-		copiersListBox     *walk.ListBox
+	// UI
+	//
 
-		err error
-	)
+	var err error
 
 	{
 		mw, err = newMainWindow()
@@ -120,22 +104,28 @@ func main() {
 		pages := tw.Pages()
 
 		{
-			directoriesTabPage, err = walk.NewTabPage()
+			dirTabPage, err = walk.NewTabPage()
 			if err != nil {
 				logger.Printf("unable to create directories tab page. err=%v", err)
 				return
 			}
-			directoriesTabPage.SetTitle("Directories")
-			directoriesTabPage.SetLayout(walk.NewHBoxLayout())
-			pages.Add(directoriesTabPage)
+			dirTabPage.SetTitle("Directories")
+			dirTabPage.SetLayout(walk.NewHBoxLayout())
+			pages.Add(dirTabPage)
 		}
 
 		{
-			directoriesListBox, err = walk.NewListBox(directoriesTabPage)
+			dirListBox, err = walk.NewListBox(dirTabPage)
 			if err != nil {
 				logger.Printf("unable to create directories list box. err=%v", err)
 			}
-			directoriesListBox.SetModel([]string{"foo", "bar"})
+
+			dirModel, err = newDirectoriesModel()
+			if err != nil {
+				logger.Printf("unable to create directories model. err=%v", err)
+			}
+
+			dirListBox.SetModel(dirModel)
 		}
 
 		{
@@ -163,15 +153,9 @@ func main() {
 		})
 	}
 
-	{
-		tray := trayIcon{
-			mwHwnd: mw.Handle(),
-		}
-
-		if err := tray.init(); err != nil {
-			logger.Printf("unable to initialize tray icon. err=%v", err)
-			return
-		}
+	if err := tray.init(); err != nil {
+		logger.Printf("unable to initialize tray icon. err=%v", err)
+		return
 	}
 
 	mw.SetVisible(true)
