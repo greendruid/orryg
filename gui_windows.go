@@ -51,6 +51,7 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 	switch msg {
 	case wmShowUI:
 		m.SetVisible(!m.Visible())
+		win.SetForegroundWindow(m.Handle())
 		return 0
 	case win.WM_CLOSE:
 		tray.notifyIcon.Dispose()
