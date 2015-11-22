@@ -68,9 +68,6 @@ func main() {
 	e := newEngine(conf)
 	go e.run()
 
-	// UI
-	//
-
 	err := buildUI()
 	if err != nil {
 		logger.Printf("unable to build the UI. err=%v", err)

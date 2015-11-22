@@ -17,8 +17,9 @@ var (
 	dirTable   *walk.TableView
 	dirModel   *directoriesModel
 
-	copiersTabPage *walk.TabPage
-	copiersListBox *walk.ListBox
+	copierTabPage *walk.TabPage
+	copierTable   *walk.TableView
+	copierModel   *copiersModel
 
 	tray trayIcon
 )
@@ -267,21 +268,61 @@ func buildUI() (err error) {
 
 		// Copiers table
 		{
-			if copiersTabPage, err = walk.NewTabPage(); err != nil {
+			if copierTabPage, err = walk.NewTabPage(); err != nil {
 				logger.Printf("unable to create copiers tab page. err=%v", err)
 				return
 			}
-			copiersTabPage.SetTitle("Copiers")
-			copiersTabPage.SetLayout(walk.NewHBoxLayout())
-			pages.Add(copiersTabPage)
-		}
+			copierTabPage.SetTitle("Copiers")
+			copierTabPage.SetLayout(walk.NewHBoxLayout())
+			pages.Add(copierTabPage)
 
-		{
-			copiersListBox, err = walk.NewListBox(copiersTabPage)
+			copierTable, err = walk.NewTableView(copierTabPage)
 			if err != nil {
-				logger.Printf("unable to create copiers list box. err=%v", err)
+				logger.Printf("unable to create directories list box. err=%v", err)
 			}
-			copiersListBox.SetModel([]string{"foo copier", "bar copier"})
+			copierTable.SetLastColumnStretched(true)
+
+			nameColumn := walk.NewTableViewColumn()
+			nameColumn.SetName("Name")
+			nameColumn.SetTitle("Name")
+			nameColumn.SetWidth(140)
+			copierTable.Columns().Add(nameColumn)
+
+			userColumn := walk.NewTableViewColumn()
+			userColumn.SetName("User")
+			userColumn.SetTitle("User")
+			userColumn.SetWidth(60)
+			copierTable.Columns().Add(userColumn)
+
+			hostColumn := walk.NewTableViewColumn()
+			hostColumn.SetName("Host")
+			hostColumn.SetTitle("Host")
+			hostColumn.SetWidth(140)
+			copierTable.Columns().Add(hostColumn)
+
+			portColumn := walk.NewTableViewColumn()
+			portColumn.SetName("Port")
+			portColumn.SetTitle("Port")
+			portColumn.SetWidth(50)
+			copierTable.Columns().Add(portColumn)
+
+			privateKeyFileColumn := walk.NewTableViewColumn()
+			privateKeyFileColumn.SetName("PrivateKeyFile")
+			privateKeyFileColumn.SetTitle("Private key file")
+			privateKeyFileColumn.SetWidth(140)
+			copierTable.Columns().Add(privateKeyFileColumn)
+
+			backupsDirColumn := walk.NewTableViewColumn()
+			backupsDirColumn.SetName("BackupsDir")
+			backupsDirColumn.SetTitle("Backups directory")
+			copierTable.Columns().Add(backupsDirColumn)
+
+			if copierModel, err = newCopiersModel(); err != nil {
+				logger.Printf("unable to create directories model. err=%v", err)
+				return
+			}
+
+			copierTable.SetModel(copierModel)
 		}
 
 		tw.SetCurrentIndex(0)
