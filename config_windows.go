@@ -191,7 +191,7 @@ func appendAndUniq(sl []string, s string) (res []string) {
 	}
 	m[s] = struct{}{}
 
-	for k, _ := range m {
+	for k := range m {
 		res = append(res, k)
 	}
 
