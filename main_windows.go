@@ -101,7 +101,17 @@ func main() {
 	// 	e.run()
 	// }()
 
-	trayIconInit()
+	trayIcon := newTrayIcon()
+	go func() {
+		for ev := range trayIcon.mouseDownCh {
+			logger.Printf("ev: %#v", ev)
+		}
+	}()
+
+	if err := trayIcon.init(); err != nil {
+		logger.Printf("unable to initialize tray icon. err=%v", err)
+		return
+	}
 
 	msg := new(win.MSG)
 	for win.GetMessage(msg, 0, 0, 0) > 0 {
