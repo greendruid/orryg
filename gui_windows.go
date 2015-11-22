@@ -88,10 +88,7 @@ type trayIcon struct {
 	im         image.Image
 	icon       *walk.Icon
 	notifyIcon *walk.NotifyIcon
-
-	stopAction                 *walk.Action
-	stopActionTriggeredHandler int
-	mouseDownHandler           int
+	stopAction *walk.Action
 
 	err error
 }
@@ -146,7 +143,7 @@ func (i *trayIcon) setMenu() {
 		if i.err = i.stopAction.SetText("Quit"); i.err != nil {
 			return
 		}
-		i.stopActionTriggeredHandler = i.stopAction.Triggered().Attach(func() {
+		i.stopAction.Triggered().Attach(func() {
 			i.notifyIcon.Dispose()
 			win.PostMessage(mw.Handle(), win.WM_CLOSE, 0, 0)
 		})
@@ -165,7 +162,7 @@ func (i *trayIcon) attachMouseDownHandler() {
 	if i.err != nil {
 		return
 	}
-	i.mouseDownHandler = i.notifyIcon.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+	i.notifyIcon.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button == walk.LeftButton {
 			win.PostMessage(mw.Handle(), wmShowUI, 0, 0)
 		}
