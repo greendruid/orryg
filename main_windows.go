@@ -1,4 +1,3 @@
-// +build windows
 package main
 
 import (
@@ -7,13 +6,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 
 	"net/http"
 	_ "net/http/pprof"
 
+	"github.com/AllenDang/w32"
 	"github.com/vrischmann/userdir"
 )
 
@@ -72,11 +70,11 @@ func main() {
 
 	go http.ListenAndServe(":6060", nil)
 
-	if flConfigure {
-		cp := configurePrompt{conf: newWindowsConfiguration()}
-		cp.run()
-		return
-	}
+	// if flConfigure {
+	// 	cp := configurePrompt{conf: newWindowsConfiguration()}
+	// 	cp.run()
+	// 	return
+	// }
 
 	if flVerbose {
 		logger = log.New(io.MultiWriter(getLogFile(), os.Stdout), "orryg: ", log.LstdFlags)
@@ -98,14 +96,20 @@ func main() {
 		}
 	}
 
-	// Listen for os signals
-	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM)
-	go handleSignals()
+	// go func() {
+	// 	e = newEngine(newWindowsConfiguration())
+	// 	e.run()
+	// }()
 
-	go func() {
-		e = newEngine(newWindowsConfiguration())
-		e.run()
-	}()
+	trayIconInit()
+
+	msg := new(w32.MSG)
+	for w32.GetMessage(msg, 0, 0, 0) > 0 {
+		w32.TranslateMessage(msg)
+		w32.DispatchMessage(msg)
+	}
+
+	logger.Println("lalala")
 
 	err := <-allDoneCh
 	if err != nil {
