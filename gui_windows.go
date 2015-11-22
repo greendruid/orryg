@@ -14,7 +14,35 @@ const (
 )
 
 type mainWindow struct {
-	mw *walk.MainWindow
+	*walk.MainWindow
+}
+
+func newMainWindow() (*mainWindow, error) {
+	mw, err := walk.NewMainWindow()
+	if err != nil {
+		return nil, err
+	}
+
+	w := &mainWindow{
+		MainWindow: mw,
+	}
+	// NOTE(vincent): necessary so that our WndProc is called.
+	err = walk.InitWrapperWindow(w)
+
+	return w, err
+}
+
+func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) uintptr {
+	switch msg {
+	case wmShowUI:
+		m.SetVisible(!m.Visible())
+		return 0
+	case win.WM_CLOSE:
+		// TODO(vincent): do we want to do something here ?
+		fallthrough
+	default:
+		return m.FormBase.WndProc(hwnd, msg, wParam, lParam)
+	}
 }
 
 type mouseDownEvent struct {
@@ -24,6 +52,7 @@ type mouseDownEvent struct {
 }
 
 type trayIcon struct {
+	mwHwnd     win.HWND
 	im         image.Image
 	icon       *walk.Icon
 	notifyIcon *walk.NotifyIcon
@@ -86,7 +115,7 @@ func (i *trayIcon) setMenu() {
 			return
 		}
 		i.stopActionTriggeredHandler = i.stopAction.Triggered().Attach(func() {
-			win.PostMessage(win.HWND(0), win.WM_CLOSE, 0, 0)
+			win.PostMessage(i.mwHwnd, win.WM_CLOSE, 0, 0)
 		})
 		i.err = menu.Actions().Add(i.stopAction)
 	}
@@ -105,7 +134,7 @@ func (i *trayIcon) attachMouseDownHandler() {
 	}
 	i.mouseDownHandler = i.notifyIcon.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button == walk.LeftButton {
-			win.PostMessage(win.HWND(0), wmShowUI, 0, 0)
+			win.PostMessage(i.mwHwnd, wmShowUI, 0, 0)
 		}
 	})
 }

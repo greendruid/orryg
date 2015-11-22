@@ -11,7 +11,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/lxn/win"
+	"github.com/lxn/walk"
 	"github.com/vrischmann/userdir"
 )
 
@@ -90,33 +90,48 @@ func main() {
 	e = newEngine(newWindowsConfiguration())
 	go e.run()
 
-	var trayIcon trayIcon
-
-	if err := trayIcon.init(); err != nil {
-		logger.Printf("unable to initialize tray icon. err=%v", err)
+	mw, err := newMainWindow()
+	if err != nil {
+		logger.Printf("unable to create new main window. err=%v", err)
 		return
 	}
 
-	msg := new(win.MSG)
-loop:
-	for {
-		if n := win.GetMessage(msg, 0, 0, 0); n == 0 || n == -1 {
-			break
+	mw.SetSize(walk.Size{Width: 640, Height: 480})
+	mw.SetVisible(false)
+
+	{
+		tray := trayIcon{
+			mwHwnd: mw.Handle(),
 		}
 
-		switch msg.Message {
-		case wmShowUI:
-
-		case win.WM_CLOSE:
-			break loop
-		default:
-			win.TranslateMessage(msg)
-			win.DispatchMessage(msg)
+		if err := tray.init(); err != nil {
+			logger.Printf("unable to initialize tray icon. err=%v", err)
+			return
 		}
 	}
 
-	err := e.stop()
-	if err != nil {
-		logger.Printf("unable to stop engine correctly. err=%v", err)
-	}
+	mw.Run()
+
+	// 	msg := new(win.MSG)
+	// loop:
+	// 	for {
+	// 		if n := win.GetMessage(msg, 0, 0, 0); n == 0 || n == -1 {
+	// 			break
+	// 		}
+	//
+	// 		switch msg.Message {
+	// 		case wmShowUI:
+	//
+	// 		case win.WM_CLOSE:
+	// 			break loop
+	// 		default:
+	// 			win.TranslateMessage(msg)
+	// 			win.DispatchMessage(msg)
+	// 		}
+	// 	}
+
+	// err := e.stop()
+	// if err != nil {
+	// 	logger.Printf("unable to stop engine correctly. err=%v", err)
+	// }
 }
