@@ -10,7 +10,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/lxn/walk"
 	"github.com/vrischmann/userdir"
 )
 
@@ -44,15 +43,6 @@ func getLogFile() io.Writer {
 
 var (
 	conf configuration
-
-	mw             *mainWindow
-	tw             *tabWidget
-	dirTabPage     *walk.TabPage
-	dirListBox     *walk.ListBox
-	dirModel       *directoriesModel
-	copiersTabPage *walk.TabPage
-	copiersListBox *walk.ListBox
-	tray           trayIcon
 )
 
 func main() {
@@ -81,103 +71,14 @@ func main() {
 	// UI
 	//
 
-	var err error
-
-	{
-		mw, err = newMainWindow()
-		if err != nil {
-			logger.Printf("unable to create new main window. err=%v", err)
-			return
-		}
-		mw.SetSize(walk.Size{Width: 640, Height: 480})
-		mw.SetLayout(walk.NewHBoxLayout())
-	}
-
-	{
-		tw, err = newTabWidget(mw)
-		if err != nil {
-			logger.Printf("unable to create new tab widget. err=%v", err)
-			return
-		}
-		tw.SetVisible(true)
-
-		pages := tw.Pages()
-
-		{
-			dirTabPage, err = walk.NewTabPage()
-			if err != nil {
-				logger.Printf("unable to create directories tab page. err=%v", err)
-				return
-			}
-			dirTabPage.SetTitle("Directories")
-			dirTabPage.SetLayout(walk.NewHBoxLayout())
-			pages.Add(dirTabPage)
-		}
-
-		{
-			dirListBox, err = walk.NewListBox(dirTabPage)
-			if err != nil {
-				logger.Printf("unable to create directories list box. err=%v", err)
-			}
-
-			dirModel, err = newDirectoriesModel()
-			if err != nil {
-				logger.Printf("unable to create directories model. err=%v", err)
-			}
-
-			dirListBox.SetModel(dirModel)
-		}
-
-		{
-			copiersTabPage, err = walk.NewTabPage()
-			if err != nil {
-				logger.Printf("unable to create copiers tab page. err=%v", err)
-				return
-			}
-			copiersTabPage.SetTitle("Copiers")
-			copiersTabPage.SetLayout(walk.NewHBoxLayout())
-			pages.Add(copiersTabPage)
-		}
-
-		{
-			copiersListBox, err = walk.NewListBox(copiersTabPage)
-			if err != nil {
-				logger.Printf("unable to create copiers list box. err=%v", err)
-			}
-			copiersListBox.SetModel([]string{"foo copier", "bar copier"})
-		}
-
-		tw.SetCurrentIndex(0)
-		tw.CurrentIndexChanged().Attach(func() {
-			logger.Printf("current index: %v", tw.CurrentIndex())
-		})
-	}
-
-	if err := tray.init(); err != nil {
-		logger.Printf("unable to initialize tray icon. err=%v", err)
+	err := buildUI()
+	if err != nil {
+		logger.Printf("unable to build the UI. err=%v", err)
 		return
 	}
 
-	mw.SetVisible(true)
+	// NOTE(vincent): this is blocking
 	mw.Run()
-
-	// 	msg := new(win.MSG)
-	// loop:
-	// 	for {
-	// 		if n := win.GetMessage(msg, 0, 0, 0); n == 0 || n == -1 {
-	// 			break
-	// 		}
-	//
-	// 		switch msg.Message {
-	// 		case wmShowUI:
-	//
-	// 		case win.WM_CLOSE:
-	// 			break loop
-	// 		default:
-	// 			win.TranslateMessage(msg)
-	// 			win.DispatchMessage(msg)
-	// 		}
-	// 	}
 
 	// err := e.stop()
 	// if err != nil {

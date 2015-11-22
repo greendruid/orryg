@@ -9,6 +9,20 @@ import (
 	"github.com/lxn/win"
 )
 
+var (
+	mw *mainWindow
+	tw *tabWidget
+
+	dirTabPage *walk.TabPage
+	dirTable   *walk.TableView
+	dirModel   *directoriesModel
+
+	copiersTabPage *walk.TabPage
+	copiersListBox *walk.ListBox
+
+	tray trayIcon
+)
+
 const (
 	wmShowUI = win.WM_USER + 1
 )
@@ -167,4 +181,121 @@ func (i *trayIcon) init() error {
 	i.setVisible(true)
 
 	return i.err
+}
+
+func buildUI() (err error) {
+	{
+		mw, err = newMainWindow()
+		if err != nil {
+			logger.Printf("unable to create new main window. err=%v", err)
+			return
+		}
+		mw.SetSize(walk.Size{Width: 800, Height: 480})
+		mw.SetLayout(walk.NewHBoxLayout())
+	}
+
+	{
+		if tw, err = newTabWidget(mw); err != nil {
+			logger.Printf("unable to create new tab widget. err=%v", err)
+			return
+		}
+		tw.SetVisible(true)
+
+		// Make the tabs
+		//
+
+		pages := tw.Pages()
+
+		// Directories table
+		{
+			if dirTabPage, err = walk.NewTabPage(); err != nil {
+				logger.Printf("unable to create directories tab page. err=%v", err)
+				return
+			}
+			dirTabPage.SetTitle("Directories")
+			dirTabPage.SetLayout(walk.NewHBoxLayout())
+			pages.Add(dirTabPage)
+
+			dirTable, err = walk.NewTableView(dirTabPage)
+			if err != nil {
+				logger.Printf("unable to create directories list box. err=%v", err)
+			}
+			dirTable.SetLastColumnStretched(true)
+
+			archiveNameColumn := walk.NewTableViewColumn()
+			archiveNameColumn.SetName("ArchiveName")
+			archiveNameColumn.SetTitle("Archive name")
+			archiveNameColumn.SetWidth(140)
+			dirTable.Columns().Add(archiveNameColumn)
+
+			originalPathColumn := walk.NewTableViewColumn()
+			originalPathColumn.SetName("OriginalPath")
+			originalPathColumn.SetTitle("Path")
+			originalPathColumn.SetWidth(140)
+			dirTable.Columns().Add(originalPathColumn)
+
+			frequencyColumn := walk.NewTableViewColumn()
+			frequencyColumn.SetName("Frequency")
+			frequencyColumn.SetTitle("Frequency")
+			frequencyColumn.SetWidth(100)
+			dirTable.Columns().Add(frequencyColumn)
+
+			maxBackupsColumn := walk.NewTableViewColumn()
+			maxBackupsColumn.SetName("MaxBackups")
+			maxBackupsColumn.SetTitle("Max nb. of backups")
+			maxBackupsColumn.SetWidth(120)
+			dirTable.Columns().Add(maxBackupsColumn)
+
+			maxBackupAgeColumn := walk.NewTableViewColumn()
+			maxBackupAgeColumn.SetName("MaxBackupAge")
+			maxBackupAgeColumn.SetTitle("Max age of backups")
+			maxBackupAgeColumn.SetWidth(120)
+			dirTable.Columns().Add(maxBackupAgeColumn)
+
+			lastUpdatedColumn := walk.NewTableViewColumn()
+			lastUpdatedColumn.SetName("LastUpdated")
+			lastUpdatedColumn.SetTitle("Last updated")
+			dirTable.Columns().Add(lastUpdatedColumn)
+
+			if dirModel, err = newDirectoriesModel(); err != nil {
+				logger.Printf("unable to create directories model. err=%v", err)
+				return
+			}
+
+			dirTable.SetModel(dirModel)
+		}
+
+		// Copiers table
+		{
+			if copiersTabPage, err = walk.NewTabPage(); err != nil {
+				logger.Printf("unable to create copiers tab page. err=%v", err)
+				return
+			}
+			copiersTabPage.SetTitle("Copiers")
+			copiersTabPage.SetLayout(walk.NewHBoxLayout())
+			pages.Add(copiersTabPage)
+		}
+
+		{
+			copiersListBox, err = walk.NewListBox(copiersTabPage)
+			if err != nil {
+				logger.Printf("unable to create copiers list box. err=%v", err)
+			}
+			copiersListBox.SetModel([]string{"foo copier", "bar copier"})
+		}
+
+		tw.SetCurrentIndex(0)
+		tw.CurrentIndexChanged().Attach(func() {
+			logger.Printf("current index: %v", tw.CurrentIndex())
+		})
+	}
+
+	if err = tray.init(); err != nil {
+		logger.Printf("unable to initialize tray icon. err=%v", err)
+		return
+	}
+
+	mw.SetVisible(true)
+
+	return
 }
