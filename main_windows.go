@@ -1,11 +1,13 @@
 package main
 
 import (
+	"flag"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -43,9 +45,19 @@ func getLogFile() io.Writer {
 
 var (
 	conf configuration
+	en   *engine // TODO(vincent): remove global maybe ?
+
+	// debug flags
+	flDebugResetLastUpdated bool
 )
 
+func init() {
+	flag.BoolVar(&flDebugResetLastUpdated, "reset-last-updated", false, "Reset the last updated date of all directories")
+}
+
 func main() {
+	flag.Parse()
+
 	go http.ListenAndServe(":6060", nil)
 
 	logger = log.New(io.MultiWriter(getLogFile(), os.Stdout), "orryg: ", log.LstdFlags)
@@ -53,9 +65,26 @@ func main() {
 	{
 		conf = newWindowsConfiguration()
 
+		if flDebugResetLastUpdated {
+			dirs, err := conf.ReadDirectories()
+			if err != nil {
+				logger.Printf("unable to read the directories from the configuration. err=%v", err)
+				return
+			}
+
+			for _, d := range dirs {
+				d.LastUpdated = time.Time{}
+				err := conf.UpdateLastUpdated(d)
+				if err != nil {
+					logger.Printf("unable to reset the last updated time. err=%v", err)
+					return
+				}
+			}
+		}
+
 		s, err := conf.DumpConfig()
 		if err != nil {
-			logger.Printf("there was a problem while dumping the configuration. err=%v", err)
+			logger.Printf("unable to dump the configuration. err=%v", err)
 			return
 		}
 
@@ -65,8 +94,8 @@ func main() {
 		}
 	}
 
-	e := newEngine(conf)
-	go e.run()
+	en = newEngine(conf)
+	go en.run()
 
 	err := buildUI()
 	if err != nil {
@@ -75,9 +104,10 @@ func main() {
 	}
 
 	// NOTE(vincent): this is blocking
+	mw.SetVisible(true)
 	mw.Run()
 
-	if err = e.stop(); err != nil {
+	if err = en.stop(); err != nil {
 		logger.Printf("unable to stop engine correctly. err=%v", err)
 	}
 }

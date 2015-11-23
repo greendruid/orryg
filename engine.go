@@ -19,11 +19,11 @@ type engine struct {
 
 func newEngine(conf configuration) *engine {
 	return &engine{
-		conf:    conf,
+		conf:               conf,
 		DirectoryChangedCh: make(chan directory, 128),
-		stopCh:  make(chan struct{}),
-		doneCh:  make(chan struct{}),
-		copiers: make(map[string]*scpRemoteCopier),
+		stopCh:             make(chan struct{}),
+		doneCh:             make(chan struct{}),
+		copiers:            make(map[string]*scpRemoteCopier),
 	}
 }
 
