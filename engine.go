@@ -8,6 +8,8 @@ import (
 type engine struct {
 	conf configuration
 
+	DirectoryChangedCh chan directory
+
 	stopCh chan struct{}
 	doneCh chan struct{}
 
@@ -18,6 +20,7 @@ type engine struct {
 func newEngine(conf configuration) *engine {
 	return &engine{
 		conf:    conf,
+		DirectoryChangedCh: make(chan directory, 128),
 		stopCh:  make(chan struct{}),
 		doneCh:  make(chan struct{}),
 		copiers: make(map[string]*scpRemoteCopier),
@@ -79,6 +82,10 @@ func (e *engine) stop() error {
 		if err := c.Close(); err != nil {
 			return err
 		}
+	}
+
+	if e.DirectoryChangedCh != nil {
+		close(e.DirectoryChangedCh)
 	}
 
 	e.stopCh <- struct{}{}
@@ -220,9 +227,12 @@ func (e *engine) backupOne(id directory) {
 
 	// Persist the new config
 	{
+		id.LastUpdated = time.Now()
 		if err := e.conf.UpdateLastUpdated(id); err != nil {
 			logger.Printf("unable to update the last updated field of %v. err=%v", id, err)
 		}
+		logger.Printf("new updated time: %v", id.LastUpdated)
+		e.notifyDirectoryChanged(id)
 	}
 }
 
@@ -252,6 +262,8 @@ func (e *engine) getOutOfDate() (res []directory, err error) {
 	}
 
 	for _, d := range directories {
+		e.notifyDirectoryChanged(d) // TODO(vincent): maybe don't do this all the time
+
 		elapsed := time.Now().Sub(d.LastUpdated)
 		if d.LastUpdated.IsZero() || elapsed >= d.Frequency {
 			res = append(res, d)
@@ -268,10 +280,18 @@ func (e *engine) getExpirable() (res []directory, err error) {
 	}
 
 	for _, d := range directories {
+		e.notifyDirectoryChanged(d) // TODO(vincent): maybe don't do this all the time
+
 		if d.MaxBackups > 0 || d.MaxBackupAge > 0 {
 			res = append(res, d)
 		}
 	}
 
 	return
+}
+
+func (e *engine) notifyDirectoryChanged(d directory) {
+	if e.DirectoryChangedCh != nil {
+		e.DirectoryChangedCh <- d
+	}
 }
