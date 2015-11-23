@@ -138,6 +138,19 @@ func (e *engine) run() {
 
 loop:
 	for {
+		// prioritize processing the pending stuff
+		select {
+		case id := <-backupOneCh:
+			e.backupOne(id)
+			continue
+
+		case id := <-cleanupOneCh:
+			e.expireOne(id)
+			continue
+
+		default:
+		}
+
 		select {
 		case <-backupCh:
 			ood, err := e.getOutOfDate()
@@ -146,12 +159,11 @@ loop:
 				continue loop
 			}
 
+			logger.Printf("out of date: %v", ood)
+
 			for _, id := range ood {
 				backupOneCh <- id
 			}
-
-		case id := <-backupOneCh:
-			e.backupOne(id)
 
 		case <-cleanupCh:
 			directories, err := e.getExpirable()
@@ -163,9 +175,6 @@ loop:
 			for _, id := range directories {
 				cleanupOneCh <- id
 			}
-
-		case id := <-cleanupOneCh:
-			e.expireOne(id)
 
 		case <-e.stopCh:
 			break loop
