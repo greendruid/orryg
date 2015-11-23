@@ -260,6 +260,7 @@ func buildUI() (err error) {
 				logger.Printf("unable to create directories model. err=%v", err)
 				return
 			}
+			go dirModel.monitorDirChanged(en.DirectoryChangedCh)
 
 			dirTable.SetModel(dirModel)
 		}
