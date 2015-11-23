@@ -35,6 +35,14 @@ type directory struct {
 	LastUpdated  time.Time
 }
 
+func (d *directory) Equal(other directory) bool {
+	return d.ArchiveName == other.ArchiveName && d.OriginalPath == other.OriginalPath
+}
+
+func (d *directory) UniqueID() string {
+	return d.ArchiveName + d.OriginalPath
+}
+
 func (d directory) String() string {
 	const format = "{frequency: %s, originalPath: %s, archiveName: %s, lastUpdated: %s}"
 	return fmt.Sprintf(format,
