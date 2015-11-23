@@ -24,8 +24,19 @@ func newDirectoriesModel() (*directoriesModel, error) {
 	}, nil
 }
 
-func (d *directoriesModel) RowCount() int {
-	return len(d.directories)
+func (m *directoriesModel) monitorDirChanged(ch chan directory) {
+	for changedDir := range ch {
+		for i, dd := range m.directories {
+			if dd.Equal(changedDir) {
+				m.directories[i] = changedDir
+				m.PublishRowChanged(i)
+			}
+		}
+	}
+}
+
+func (m *directoriesModel) RowCount() int {
+	return len(m.directories)
 }
 
 const (
@@ -37,12 +48,12 @@ const (
 	colLastUpdated
 )
 
-func (d *directoriesModel) Value(row, col int) interface{} {
-	if row > len(d.directories) {
+func (m *directoriesModel) Value(row, col int) interface{} {
+	if row > len(m.directories) {
 		return nil
 	}
 
-	dd := d.directories[row]
+	dd := m.directories[row]
 
 	switch col {
 	case colArchiveName:
