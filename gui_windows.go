@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"os"
+	"path/filepath"
 
 	"github.com/lxn/walk"
 	"github.com/lxn/win"
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -25,7 +28,9 @@ var (
 )
 
 const (
-	wmShowUI = win.WM_USER + 1
+	wmShowUI         = win.WM_USER + 1
+	wmEnableAutoRun  = win.WM_USER + 2
+	wmDisableAutoRun = win.WM_USER + 3
 )
 
 type mainWindow struct {
@@ -47,12 +52,32 @@ func newMainWindow() (*mainWindow, error) {
 	return w, err
 }
 
+// WndProc is where all the "business logic" occurs for the main window.
 func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case wmShowUI:
 		m.SetVisible(!m.Visible())
 		win.SetForegroundWindow(m.Handle())
 		return 0
+
+	case wmEnableAutoRun:
+		err := enableAutoRun()
+		// TODO(vincent): show a message box maybe ?
+		if err != nil {
+			logger.Printf("unable to change the autorun. err=%v", err)
+		}
+
+		return 0
+
+	case wmDisableAutoRun:
+		err := disableAutoRun()
+		// TODO(vincent): show a message box maybe ?
+		if err != nil {
+			logger.Printf("unable to change the autorun. err=%v", err)
+		}
+
+		return 0
+
 	case win.WM_CLOSE:
 		tray.notifyIcon.Dispose()
 		// TODO(vincent): do we want to do something here ?
@@ -85,11 +110,14 @@ func (w *tabWidget) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) u
 	return w.TabWidget.WndProc(hwnd, msg, wParam, lParam)
 }
 
+// TODO(vincent): refactor that shit
 type trayIcon struct {
 	im         image.Image
 	icon       *walk.Icon
 	notifyIcon *walk.NotifyIcon
-	stopAction *walk.Action
+
+	stopAction          *walk.Action
+	enableAutoRunAction *walk.Action
 
 	err error
 }
@@ -140,15 +168,58 @@ func (i *trayIcon) setMenu() {
 	menu := i.notifyIcon.ContextMenu()
 
 	{
+		i.enableAutoRunAction = walk.NewAction()
+
+		if i.err = i.enableAutoRunAction.SetText("Autorun with Windows"); i.err != nil {
+			return
+		}
+
+		if i.err = i.enableAutoRunAction.SetCheckable(true); i.err != nil {
+			return
+		}
+
+		var autoRunEnabled bool
+		autoRunEnabled, i.err = isAutoRunEnabled()
+		if i.err != nil {
+			return
+		}
+
+		if i.err = i.enableAutoRunAction.SetChecked(autoRunEnabled); i.err != nil {
+			return
+		}
+
+		i.enableAutoRunAction.Triggered().Attach(func() {
+			switch i.enableAutoRunAction.Checked() {
+			case true:
+				win.PostMessage(mw.Handle(), wmDisableAutoRun, 0, 0)
+				i.enableAutoRunAction.SetChecked(false)
+			case false:
+				win.PostMessage(mw.Handle(), wmEnableAutoRun, 0, 0)
+				i.enableAutoRunAction.SetChecked(true)
+			}
+		})
+
+		if i.err = menu.Actions().Add(i.enableAutoRunAction); i.err != nil {
+			return
+		}
+	}
+
+	menu.Actions().Add(walk.NewSeparatorAction())
+
+	{
 		i.stopAction = walk.NewAction()
 		if i.err = i.stopAction.SetText("Quit"); i.err != nil {
 			return
 		}
+
 		i.stopAction.Triggered().Attach(func() {
 			i.notifyIcon.Dispose()
 			win.PostMessage(mw.Handle(), win.WM_CLOSE, 0, 0)
 		})
-		i.err = menu.Actions().Add(i.stopAction)
+
+		if i.err = menu.Actions().Add(i.stopAction); i.err != nil {
+			return
+		}
 	}
 }
 
@@ -331,4 +402,74 @@ func buildUI() (err error) {
 	}
 
 	return tray.init()
+}
+
+func isAutoRunEnabled() (bool, error) {
+	key, err := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, registry.QUERY_VALUE)
+	if err != nil {
+		return false, err
+	}
+	defer key.Close()
+
+	s, _, err := key.GetStringValue("Orryg")
+	if err == registry.ErrNotExist {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return s != "", nil
+}
+
+func enableAutoRun() error {
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
+	if err != nil {
+		return err
+	}
+	defer key.Close()
+
+	exe, err := executablePath()
+	if err != nil {
+		return err
+	}
+
+	return key.SetStringValue("Orryg", exe)
+}
+
+func disableAutoRun() error {
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
+	if err != nil {
+		return err
+	}
+	defer key.Close()
+
+	return key.DeleteValue("Orryg")
+}
+
+// https://github.com/golang/sys/blob/master/windows/svc/example/install.go#L18-L42
+func executablePath() (string, error) {
+	prog := os.Args[0]
+	p, err := filepath.Abs(prog)
+	if err != nil {
+		return "", err
+	}
+	fi, err := os.Stat(p)
+	if err == nil {
+		if !fi.Mode().IsDir() {
+			return p, nil
+		}
+		err = fmt.Errorf("%s is directory", p)
+	}
+	if filepath.Ext(p) == "" {
+		p += ".exe"
+		fi, err := os.Stat(p)
+		if err == nil {
+			if !fi.Mode().IsDir() {
+				return p, nil
+			}
+			err = fmt.Errorf("%s is directory", p)
+		}
+	}
+	return "", err
 }

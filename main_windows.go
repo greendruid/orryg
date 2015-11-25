@@ -2,15 +2,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
-
-	"golang.org/x/sys/windows/registry"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -56,48 +53,6 @@ var (
 
 func init() {
 	flag.BoolVar(&flDebugResetLastUpdated, "reset-last-updated", false, "Reset the last updated date of all directories")
-}
-
-func enableAutoRun() error {
-	key, _, err := registry.CreateKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
-	if err != nil {
-		return err
-	}
-	defer key.Close()
-
-	exe, err := executablePath()
-	if err != nil {
-		return err
-	}
-
-	return key.SetStringValue("Orryg", exe)
-}
-
-// https://github.com/golang/sys/blob/master/windows/svc/example/install.go#L18-L42
-func executablePath() (string, error) {
-	prog := os.Args[0]
-	p, err := filepath.Abs(prog)
-	if err != nil {
-		return "", err
-	}
-	fi, err := os.Stat(p)
-	if err == nil {
-		if !fi.Mode().IsDir() {
-			return p, nil
-		}
-		err = fmt.Errorf("%s is directory", p)
-	}
-	if filepath.Ext(p) == "" {
-		p += ".exe"
-		fi, err := os.Stat(p)
-		if err == nil {
-			if !fi.Mode().IsDir() {
-				return p, nil
-			}
-			err = fmt.Errorf("%s is directory", p)
-		}
-	}
-	return "", err
 }
 
 func main() {
