@@ -84,13 +84,13 @@ func (e *engine) stop() error {
 		}
 	}
 
-	if e.DirectoryChangedCh != nil {
-		close(e.DirectoryChangedCh)
-	}
-
 	e.stopCh <- struct{}{}
 
 	<-e.doneCh
+
+	if e.DirectoryChangedCh != nil {
+		close(e.DirectoryChangedCh)
+	}
 
 	return nil
 }
