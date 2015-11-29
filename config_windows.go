@@ -277,20 +277,20 @@ func (c *windowsConfiguration) UpdateLastUpdated(d directory) error {
 }
 
 func (c *windowsConfiguration) DumpConfig() (res []string, err error) {
-	// {
-	// 	copiers, err := c.ReadSCPCopiers()
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	//
-	// 	if len(copiers) > 0 {
-	// 		res = append(res, "copiers:")
-	// 		for _, conf := range copiers {
-	// 			res = append(res, conf.String())
-	// 		}
-	// 	}
-	// }
-	//
+	{
+		copiers, err := c.ReadSCPCopiers()
+		if err != nil {
+			return nil, err
+		}
+
+		if len(copiers) > 0 {
+			res = append(res, "copiers:")
+			for _, conf := range copiers {
+				res = append(res, conf.String())
+			}
+		}
+	}
+
 	{
 		directories, err := c.ReadDirectories()
 		if err != nil {
