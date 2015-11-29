@@ -57,8 +57,13 @@ func newMainWindow() (*mainWindow, error) {
 func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case wmShowUI:
-		m.SetVisible(!m.Visible())
-		win.SetForegroundWindow(m.Handle())
+		if m.Visible() {
+			m.Hide()
+		} else {
+			m.Show()
+			win.SetForegroundWindow(m.Handle())
+		}
+
 		return 0
 
 	case wmEnableAutoRun:
@@ -79,13 +84,20 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 
 		return 0
 
+	case win.WM_SIZE:
+		// 1 means minimized
+		// https://msdn.microsoft.com/en-us/library/windows/desktop/ms632646(v=vs.85).aspx
+		if wParam == 1 {
+			m.Hide()
+			return 0
+		}
+
 	case win.WM_CLOSE:
 		tray.notifyIcon.Dispose()
 		// TODO(vincent): do we want to do something here ?
-		fallthrough
-	default:
-		return m.FormBase.WndProc(hwnd, msg, wParam, lParam)
 	}
+
+	return m.FormBase.WndProc(hwnd, msg, wParam, lParam)
 }
 
 // TODO(vincent): maybe we don't need this
