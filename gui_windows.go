@@ -29,9 +29,9 @@ var (
 )
 
 const (
-	wmShowUI         = win.WM_USER + 1
-	wmEnableAutoRun  = win.WM_USER + 2
-	wmDisableAutoRun = win.WM_USER + 3
+	wmShowUI = win.WM_USER + iota + 1
+	wmEnableAutoRun
+	wmDisableAutoRun
 )
 
 type mainWindow struct {
