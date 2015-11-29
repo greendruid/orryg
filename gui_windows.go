@@ -58,10 +58,11 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 	switch msg {
 	case wmShowUI:
 		if m.Visible() {
-			m.Hide()
+			m.SetVisible(false)
 		} else {
-			m.Show()
+			m.SetVisible(true)
 			win.SetForegroundWindow(m.Handle())
+			win.ShowWindow(m.Handle(), win.SW_RESTORE)
 		}
 
 		return 0
@@ -88,8 +89,7 @@ func (m *mainWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) 
 		// 1 means minimized
 		// https://msdn.microsoft.com/en-us/library/windows/desktop/ms632646(v=vs.85).aspx
 		if wParam == 1 {
-			m.Hide()
-			return 0
+			win.PostMessage(m.Handle(), wmShowUI, 0, 0)
 		}
 
 	case win.WM_CLOSE:
