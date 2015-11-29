@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/png"
@@ -127,14 +128,7 @@ func (i *trayIcon) loadImage() {
 		return
 	}
 
-	var f *os.File
-	f, i.err = os.Open("./cancel.png")
-	if i.err != nil {
-		return
-	}
-	defer f.Close()
-
-	i.im, i.err = png.Decode(f)
+	i.im, i.err = png.Decode(bytes.NewReader(cancelPNG[:]))
 	if i.err != nil {
 		return
 	}
