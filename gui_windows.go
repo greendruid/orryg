@@ -295,6 +295,7 @@ func buildUI() (err error) {
 			dirTable, err = walk.NewTableView(dirTabPage)
 			if err != nil {
 				logger.Printf("unable to create directories list box. err=%v", err)
+				return
 			}
 			dirTable.SetLastColumnStretched(true)
 
@@ -355,6 +356,7 @@ func buildUI() (err error) {
 			copierTable, err = walk.NewTableView(copierTabPage)
 			if err != nil {
 				logger.Printf("unable to create directories list box. err=%v", err)
+				return
 			}
 			copierTable.SetLastColumnStretched(true)
 
