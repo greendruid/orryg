@@ -263,8 +263,7 @@ func buildUI() (err error) {
 	{
 		mw, err = newMainWindow()
 		if err != nil {
-			logger.Printf("unable to create new main window. err=%v", err)
-			return
+			return fmt.Errorf("unable to create new main window. err=%v", err)
 		}
 		mw.SetSize(walk.Size{Width: 800, Height: 480})
 		mw.SetLayout(walk.NewHBoxLayout())
@@ -272,8 +271,7 @@ func buildUI() (err error) {
 
 	{
 		if tw, err = newTabWidget(mw); err != nil {
-			logger.Printf("unable to create new tab widget. err=%v", err)
-			return
+			return fmt.Errorf("unable to create new tab widget. err=%v", err)
 		}
 		tw.SetVisible(true)
 
@@ -285,8 +283,7 @@ func buildUI() (err error) {
 		// Directories table
 		{
 			if dirTabPage, err = walk.NewTabPage(); err != nil {
-				logger.Printf("unable to create directories tab page. err=%v", err)
-				return
+				return fmt.Errorf("unable to create directories tab page. err=%v", err)
 			}
 			dirTabPage.SetTitle("Directories")
 			dirTabPage.SetLayout(walk.NewHBoxLayout())
@@ -294,8 +291,7 @@ func buildUI() (err error) {
 
 			dirTable, err = walk.NewTableView(dirTabPage)
 			if err != nil {
-				logger.Printf("unable to create directories list box. err=%v", err)
-				return
+				return fmt.Errorf("unable to create directories list box. err=%v", err)
 			}
 			dirTable.SetLastColumnStretched(true)
 
@@ -335,8 +331,7 @@ func buildUI() (err error) {
 			dirTable.Columns().Add(lastUpdatedColumn)
 
 			if dirModel, err = newDirectoriesModel(); err != nil {
-				logger.Printf("unable to create directories model. err=%v", err)
-				return
+				return fmt.Errorf("unable to create directories model. err=%v", err)
 			}
 			go dirModel.monitorDirChanged(en.DirectoryChangedCh)
 
@@ -346,8 +341,7 @@ func buildUI() (err error) {
 		// Copiers table
 		{
 			if copierTabPage, err = walk.NewTabPage(); err != nil {
-				logger.Printf("unable to create copiers tab page. err=%v", err)
-				return
+				return fmt.Errorf("unable to create copiers tab page. err=%v", err)
 			}
 			copierTabPage.SetTitle("Copiers")
 			copierTabPage.SetLayout(walk.NewHBoxLayout())
@@ -355,8 +349,7 @@ func buildUI() (err error) {
 
 			copierTable, err = walk.NewTableView(copierTabPage)
 			if err != nil {
-				logger.Printf("unable to create directories list box. err=%v", err)
-				return
+				return fmt.Errorf("unable to create directories list box. err=%v", err)
 			}
 			copierTable.SetLastColumnStretched(true)
 
@@ -396,8 +389,7 @@ func buildUI() (err error) {
 			copierTable.Columns().Add(backupsDirColumn)
 
 			if copierModel, err = newCopiersModel(); err != nil {
-				logger.Printf("unable to create directories model. err=%v", err)
-				return
+				return fmt.Errorf("unable to create directories model. err=%v", err)
 			}
 
 			copierTable.SetModel(copierModel)
