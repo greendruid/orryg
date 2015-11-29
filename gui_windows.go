@@ -405,6 +405,7 @@ func buildUI() (err error) {
 
 		tw.SetCurrentIndex(0)
 		tw.CurrentIndexChanged().Attach(func() {
+			// TODO(vincent): do we need to do something here ?
 			logger.Printf("current index: %v", tw.CurrentIndex())
 		})
 	}
