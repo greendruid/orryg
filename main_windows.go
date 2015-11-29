@@ -47,11 +47,15 @@ var (
 	conf configuration
 	en   *engine // TODO(vincent): remove global maybe ?
 
+	// standard flags
+	flMinimized bool
+
 	// debug flags
 	flDebugResetLastUpdated bool
 )
 
 func init() {
+	flag.BoolVar(&flMinimized, "minimized", false, "Start minimized")
 	flag.BoolVar(&flDebugResetLastUpdated, "reset-last-updated", false, "Reset the last updated date of all directories")
 }
 
@@ -103,8 +107,12 @@ func main() {
 		return
 	}
 
+	if flMinimized {
+		mw.SetVisible(false)
+	} else {
+		mw.SetVisible(true)
+	}
 	// NOTE(vincent): this is blocking
-	mw.SetVisible(true)
 	mw.Run()
 
 	if err = en.stop(); err != nil {

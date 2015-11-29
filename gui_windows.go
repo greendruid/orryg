@@ -428,7 +428,7 @@ func enableAutoRun() error {
 		return err
 	}
 
-	return key.SetStringValue("Orryg", `"`+exe+`"`)
+	return key.SetStringValue("Orryg", `"`+exe+`" --minimized`)
 }
 
 func disableAutoRun() error {
