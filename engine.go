@@ -159,8 +159,6 @@ loop:
 				continue loop
 			}
 
-			logger.Printf("out of date: %v", ood)
-
 			for _, id := range ood {
 				backupOneCh <- id
 			}
