@@ -35,3 +35,19 @@ configuration
 On Windows, all data is stored in the registry. I'm building the UI right now, and it will feature a way to configure everything.
 
 If you want to test right now you'll have to create the registry keys by hand.
+
+building
+--------
+
+First install `bin2hex` so you can embed the necessary data:
+
+    go get github.com/vrischmann/commands/bin2hex
+
+Then to build, run:
+
+    go generate ./...
+    go build -ldflags="-H windowsgui"
+
+Or if you want to run it with the command line:
+
+    go build
