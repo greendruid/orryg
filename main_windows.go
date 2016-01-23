@@ -9,9 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"net/http"
-	_ "net/http/pprof"
-
 	"github.com/vrischmann/userdir"
 )
 
@@ -61,8 +58,6 @@ func init() {
 
 func main() {
 	flag.Parse()
-
-	go http.ListenAndServe(":6060", nil)
 
 	logger = log.New(io.MultiWriter(getLogFile(), os.Stdout), "orryg: ", log.LstdFlags)
 
